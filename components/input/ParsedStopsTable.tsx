@@ -37,9 +37,6 @@ function getStatusBadge(stop: ParsedStop) {
             <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-700">
                 Duplicate
             </span>
-            <p className="text-xs text-amber-700">
-                Duplicate of line {stop.duplicateOfLine}
-            </p>
         </div>
     );
 }
@@ -62,12 +59,12 @@ export function ParsedStopsTable({ result }: ParsedStopsTableProps) {
 
             <div className="overflow-hidden rounded-md border">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-slate-800">
                         <tr>
-                            <th className="px-3 py-2 text-left font-medium">#</th>
-                            <th className="px-3 py-2 text-left font-medium">Lat</th>
-                            <th className="px-3 py-2 text-left font-medium">Lng</th>
-                            <th className="px-3 py-2 text-left font-medium">Status</th>
+                            <th className="px-3 py-2 text-left font-semibold text-white">#</th>
+                            <th className="px-3 py-2 text-left font-semibold text-white">Lat</th>
+                            <th className="px-3 py-2 text-left font-semibold text-white">Lng</th>
+                            <th className="px-3 py-2 text-left font-semibold text-white">Status</th>
                         </tr>
                     </thead>
 
