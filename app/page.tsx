@@ -4,12 +4,20 @@ import { useMemo, useState } from "react";
 import { CoordinatePaste } from "@/components/input/CoordinatePaste";
 import { ParsedStopsTable } from "@/components/input/ParsedStopsTable";
 import { parseCoordinateInput } from "@/lib/validation/coordinates";
+import { RouteMap } from "@/components/map/RouteMap";
 
 export default function Home() {
   const [text, setText] = useState("");
   const result = useMemo(() => {
     return parseCoordinateInput(text);
   }, [text]);
+
+  /* Derives/Keeps Valid Stops for Mapbox Representation */
+  const mapStops = useMemo(() => 
+    result.stops.filter((s) => s.status === "valid" && s.lat != null && s.lng != null)
+    .map((s) => ({ id: s.id, lat: s.lat!, lng: s.lng!})),
+    [result.stops]
+  );
 
   return (
     <main className="min-h-screen bg-slate-950 p-6">
@@ -27,10 +35,8 @@ export default function Home() {
             <ParsedStopsTable result={result} />
           </section>
 
-          <section className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-slate-700 bg-slate-900 p-4">
-            <p className="text-sm text-gray-500">
-              Map coming soon...
-            </p>
+          <section className="min-h-[400px] rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <RouteMap stops={mapStops} />
           </section>
         </div>
       </div>
