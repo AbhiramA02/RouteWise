@@ -25,9 +25,6 @@ function getStatusBadge(stop: ParsedStop) {
                 <span className="rounded-full bg-red-100 px-2 py-1 text-xs text-red-700">
                     Invalid
                 </span>
-                <p className="text-xs text-red-600">
-                    {stop.errors[0] ?? "Invalid coordinate"}
-                </p>
             </div>
         );
     }
