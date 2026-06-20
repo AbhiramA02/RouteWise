@@ -41,7 +41,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<ReverseG
     url.searchParams.set("types", "address,poi");
     url.searchParams.set("limit", "5");
 
-    // Sends Request to Mapbox Geocode API & Caches Response for 24 Hours
+    // Sends Request to Mapbox Geocode API & Caches Response
     const response = await fetch(url.toString(), {
         headers: {
             Accept: "application/json",
