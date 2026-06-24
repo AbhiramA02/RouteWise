@@ -6,12 +6,14 @@ import { ParsedStopsTable } from "@/components/input/ParsedStopsTable";
 import { parseCoordinateInput } from "@/lib/validation/coordinates";
 import { RouteMap } from "@/components/map/RouteMap";
 import { SAMPLE_STOPS_TEXT } from "@/data/sample-stops"; /* Import Sample Stops for Easy/Consistent Testing */
+import { useStopGeocoding } from "@/lib/hooks/useStopGeocoding";
 
 export default function Home() {
   const [text, setText] = useState("");
-  const result = useMemo(() => {
-    return parseCoordinateInput(text);
-  }, [text]);
+  const result = useMemo(() => { return parseCoordinateInput(text); }, [text]);
+
+  const parsedStops = useMemo(() => result.stops, [result]);
+  const geocodeByStopId = useStopGeocoding(parsedStops);
 
   /* Derives/Keeps Valid Stops for Mapbox Representation */
   const mapStops = useMemo(() => 
@@ -42,7 +44,7 @@ export default function Home() {
               Load Sample Stops
             </button>
 
-            <ParsedStopsTable result={result} />
+            <ParsedStopsTable result={result} geocodeByStopId={geocodeByStopId} />
           </section>
 
           <section className="min-h-[400px] rounded-lg border border-slate-700 bg-slate-900 p-4">
