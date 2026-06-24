@@ -8,110 +8,247 @@ See [plan.md](./plan.md) for full product spec, architecture, and algorithm deta
 
 ---
 
-## Progress summary (as of Jun 17, 2026)
+## Strategic focus (updated)
 
-### Completed — Step #3 coordinate input (Parts 1–4)
+**Pivot:** Routing algorithm is the core deliverable. Another organization handles bulk coordinate → address conversion at scale. This app should produce the **best possible walking visit order** under real-world constraints.
 
-| Part | File | Status |
-|------|------|--------|
-| Validation library | `lib/validation/coordinates.ts` | Done |
+**Primary constraints:**
+
+- Follow the walking road network (no haversine-only or awkward straight-line paths)
+- Minimize unnecessary street crossings
+- End near the start (round-trip / return-to-depot)
+- Avoid zig-zags, U-turns, and backtracking
+- Prefer same side of street when enrichment data is available
+
+**What the UI is for:** A thin dev/demo harness — paste or load coords, optimize, visualize the route, tune penalty weights. Not a full rep workflow app (yet).
+
+---
+
+## Progress summary (as of Jun 23, 2026)
+
+### Completed — Dev harness (original Days 1–2)
+
+| Area | Files | Status |
+|------|-------|--------|
+| Validation | `lib/validation/coordinates.ts` | Done |
 | Paste UI | `components/input/CoordinatePaste.tsx` | Done |
 | Results table | `components/input/ParsedStopsTable.tsx` | Done |
-| Homepage wiring | `app/page.tsx` | Done |
+| Map | `components/map/RouteMap.tsx` | Done |
+| Sample data | `data/sample-stops.ts`, `data/sample-stops.csv` | Done |
+| Reverse geocode (dev only) | `lib/mapbox/geocode.ts`, `app/api/geocode/reverse/`, `lib/hooks/useStopGeocoding.ts` | Done |
+| Homepage | `app/page.tsx` | Done |
 
 **What works today:**
 
-- Paste `lat,lng` (comma-, tab-, or space-separated) into a textarea
-- Live parsing with bounds checks and parse-error messages
-- Duplicate detection within ~10 m (haversine)
-- Summary counts and status badges in a results table
-- Two-column layout with a map placeholder
+- Paste or load sample coordinates → validate, dedupe, show on map
+- Reverse geocode addresses in the table (useful for local dev; not the product differentiator)
+- Blue pins on Mapbox map, fit bounds
 
-**Day 1 checklist status:**
-
-| Item | Status |
-|------|--------|
-| 1. Accounts & keys (`.env.local`, Mapbox tokens) | Done |
-| 2. Repo scaffold (Next.js, folders, `mapbox-gl`) | Done |
-| 3. Coordinate input (paste + validation + table) | Done |
-| 4. Map with unordered pins (`RouteMap.tsx`) | **Not started** |
-| 5. Sample data (`data/sample-stops.csv`) | **Not started** |
-
-**Day 1 success criteria (not yet met):** Open localhost → paste 10 coordinates → see pins on map; invalid/duplicate rows flagged in table.
+**This harness is kept** for algorithm development and demos. Do not invest further in geocoding UX or bulk ingest.
 
 ---
 
-## Week 1 — Input, geocoding, map (no optimizer yet)
+## What changed vs original schedule
 
-| Day | Date | Hours | Focus | Done when |
-|-----|------|-------|-------|-----------|
-| **1** | Wed Jun 17 | 4h | **Finish Day 1 leftovers** | `RouteMap.tsx` with Mapbox GL; markers for valid non-duplicate stops; fit bounds; add `data/sample-stops.csv` (15–20 stops); run `npm run build` |
-| **2** | Thu Jun 18 | 4h | **Reverse geocoding** | `app/api/geocode/reverse/route.ts` + `lib/mapbox/geocode.ts`; address column in table; loading/error states |
-| **3** | Fri Jun 19 | 4h | **CSV upload** | `CsvUpload.tsx`; reuse `coordinates.ts`; file parse for lat/lng/name/notes columns; invalid rows highlighted |
-| **4** | Mon Jun 22 | 4h | **Stop review table** | `StopReviewTable.tsx` — edit lat/lng, remove rows, fix before continuing |
-| **5** | Tue Jun 23 | 4h | **Map polish** | Click pin → `StopPopup.tsx` with address + coords; highlight selected row |
+| Original plan | New plan |
+|---------------|----------|
+| Week 1 = input, geocoding, CSV | **Skip** — org handles bulk address conversion |
+| Week 2 = first optimizer work | **Week 1** = baseline routing (matrix, TSP, polyline) |
+| Week 3 = rep workflow (export, visit status) | **Week 2** = penalty algorithm (the differentiator) |
+| Penalty weights deferred to Week 4+ | **Week 2** = penalty weights + tuning UI |
+| Geocoding as milestone | **Optimize → visualize** as milestone |
 
-**Week 1 milestone:** Paste or upload leads → validated, geocoded stops on an interactive map. No optimizer yet.
+### Deferred (do not build until algorithm MVP ships)
 
----
+- CSV upload (`CsvUpload.tsx`)
+- Stop review / edit table
+- Map popups with address details
+- Visit status badges (completed / skipped / follow-up)
+- Route save/load, auth, PostgreSQL
+- CSV/PDF export, Google/Apple Maps deep links
+- Further reverse-geocoding investment (caching, ambiguity picker)
 
-## Week 2 — Optimizer + route visualization
+### Kept as-is (no more work unless needed for algo testing)
 
-| Day | Date | Hours | Focus | Done when |
-|-----|------|-------|-------|-----------|
-| **6** | Wed Jun 24 | 4h | **Walking duration matrix** | `lib/mapbox/matrix.ts`; API route; N×N matrix for ≤25 stops |
-| **7** | Thu Jun 25 | 4h | **TSP solver** | OR-Tools (Python FastAPI sidecar *or* JS heuristic for MVP); open route + fixed start; returns visit order |
-| **8** | Fri Jun 26 | 4h | **Directions + polyline** | Mapbox Directions per leg; merged route line; numbered pins in visit order |
-| **9** | Mon Jun 29 | 4h | **Start/end + round-trip** | `StartEndPicker.tsx`; depot toggle; re-optimize on change |
-| **10** | Tue Jun 30 | 4h | **Route summary sidebar** | `OrderedStopList.tsx` + `LegSummary.tsx`; distance/time per leg + totals |
-
-**Week 2 milestone:** Full optimize → visualize loop. A rep can see an efficient walking order on the map.
-
----
-
-## Week 3 — Rep workflow + ship MVP
-
-| Day | Date | Hours | Focus | Done when |
-|-----|------|-------|-------|-----------|
-| **11** | Wed Jul 1 | 4h | **CSV export** | `ExportMenu.tsx`; download order, address, lat/lng, leg stats |
-| **12** | Thu Jul 2 | 4h | **Manual reorder + lock** | Drag-and-drop in `OrderedStopList`; lock first/last; optimizer respects locks |
-| **13** | Fri Jul 3 | 4h | **Exclude + visit status** | Exclude stops; completed / skipped / follow-up badges; session state |
-| **14** | Mon Jul 6 | 4h | **Save/load routes** | In-memory or SQLite; named routes survive refresh (no auth) |
-| **15** | Tue Jul 7 | 4h | **Polish + ship** | Error/loading UX; wire sample data; README run instructions; demo-ready |
-
-**MVP ship target: Tue Jul 7**
+- Coordinate paste + validation
+- Map with pins
+- Reverse geocode (dev convenience only)
+- Sample stops for benchmarks
 
 ---
 
-## Deferred past MVP (Week 4+)
+## Architecture
 
-Only start after the Jul 7 milestone:
+```mermaid
+flowchart LR
+  subgraph frontend [Next.js thin UI]
+    Input[Paste or load enriched file]
+    Map[Map polyline numbered pins]
+    Sliders[Penalty weight sliders]
+  end
+
+  subgraph optimizer [Python FastAPI core]
+    Cluster[Cluster stops]
+    Matrix[Penalty-augmented cost matrix]
+    TSP[OR-Tools TSP]
+  end
+
+  subgraph external [External]
+    Mapbox[Mapbox Matrix plus Directions]
+    OrgData[Org geocoded address data]
+  end
+
+  Input --> optimizer
+  OrgData --> Input
+  optimizer --> Mapbox
+  optimizer --> Map
+  Sliders --> optimizer
+```
+
+- **Next.js:** UI, Mapbox map rendering, API proxies for Matrix/Directions (initially)
+- **Python FastAPI:** OR-Tools TSP, clustering, penalty matrix (promote here as algorithm grows)
+- **Mapbox:** Walking duration matrix + Directions polylines (never haversine-only ordering)
+
+---
+
+## Org import contract (define early)
+
+Coordinate with the other organization on an enriched stop format. Algorithm penalties depend on which fields they provide.
+
+**Minimum (required):**
+
+```json
+{
+  "stops": [
+    { "id": "1", "lat": 34.252084, "lng": -118.750213 }
+  ]
+}
+```
+
+**Ideal (enables full penalty matrix):**
+
+```json
+{
+  "stops": [
+    {
+      "id": "1",
+      "lat": 34.252084,
+      "lng": -118.750213,
+      "street_name": "Coppertree Court",
+      "house_number": "731",
+      "side_of_street": "north",
+      "address_type": "residential"
+    }
+  ]
+}
+```
+
+| Field | Used for |
+|-------|----------|
+| `lat`, `lng` | Matrix, map pins, clustering |
+| `side_of_street` | Side-switch penalty (`w_side`) |
+| `street_name` | Block clustering, serpentine ordering |
+| `house_number` | Within-block sort order |
+
+---
+
+## Phase 1 — Baseline routing (Week 1)
+
+**Milestone:** Paste 15 coords → click Optimize → sensible walking order on map with numbered pins and street-following polyline.
+
+| Day | Focus | Done when |
+|-----|-------|-----------|
+| **A1** | Mapbox Matrix API + optimize API skeleton | `lib/mapbox/matrix.ts`; `POST /api/optimize` returns N×N walking durations for ≤25 stops |
+| **A2** | Naive TSP solver | OR-Tools (FastAPI) or greedy nearest-neighbor; API returns visit order indices |
+| **A3** | Directions + polyline | Mapbox Directions per leg; merged route line on map; numbered pins in visit order |
+| **A4** | Round-trip + fixed start/end | Toggle open route vs return near start; re-optimize on change |
+| **A5** | Ordered stop list + leg stats | `OrderedStopList.tsx` + totals; crossing count from directions (post-hoc) |
+
+**A1 is the immediate next step** — skip original Days 3–5 (CSV, review table, map popups).
+
+---
+
+## Phase 2 — Penalty algorithm (Week 2)
+
+**Milestone:** Penalty-augmented TSP measurably beats naive TSP on crossing count and route naturalness. Weights tunable in UI.
+
+Maps to [plan.md](./plan.md) Stages B + C:
+
+```
+cost(i,j) = duration(i,j)
+  + w_cross * crossing_penalty(i,j)
+  + w_side  * side_switch_penalty(i,j)
+  + w_uturn * u_turn_penalty(i,j)
+  + w_back  * backtrack_penalty(i,j)
+```
+
+| Day | Focus | Done when |
+|-----|-------|-----------|
+| **B1** | Street-proximity clustering | Stops on same block grouped before global TSP |
+| **B2** | Side-switch penalty | Consecutive same-side visits when `side_of_street` known |
+| **B3** | Crossing penalty | Penalize edges that imply a street crossing |
+| **B4** | U-turn + backtrack penalties | Serpentine-ish ordering within clusters |
+| **B5** | `OptimizationSettings` sliders | `w_cross`, `w_side`, `w_uturn`, `w_back`, round-trip weight; re-optimize on change |
+
+---
+
+## Phase 3 — Integration + credibility (Week 3)
+
+**Milestone:** Demo-ready for project lead — benchmark results, org data import, constraint tuning documented.
+
+| Day | Focus | Done when |
+|-----|-------|-----------|
+| **C1** | Load enriched stops from org file | JSON/CSV import uses org-provided fields (not geocode API) |
+| **C2** | Benchmark suite | 3–5 fixed suburban datasets; log crossings, duration, side consistency |
+| **C3** | Lock / exclude stops in optimizer | Constraints respected on re-optimize |
+| **C4** | Before/after comparison UI | Naive TSP vs penalty TSP side-by-side or toggle |
+| **C5** | Demo doc + README | How to run optimizer, tune weights, interpret metrics |
+
+**MVP ship target:** end of Week 3
+
+---
+
+## Success criteria (revised)
+
+| Criterion | Target |
+|-----------|--------|
+| Network-based routing | Visit order uses Mapbox walking **duration**, never haversine-only |
+| Crossing count | ≤ manual serpentine baseline on 15–25 stop suburban sets |
+| Round-trip | End stop within ~200 m of start when round-trip enabled |
+| Side consistency | ≥ 80% consecutive same-side visits when org provides `side_of_street` |
+| Performance | 20-stop optimize + render < 15 s (warm cache) |
+| Visual proof | Numbered pins + polyline follows streets (Directions geometry) |
+
+---
+
+## Deferred past algorithm MVP (Week 4+)
+
+Only after Phase 3 milestone:
 
 - PostgreSQL + PostGIS
-- User accounts / saved routes in DB
-- Side-of-street penalties, OSM enrichment
+- User accounts / saved routes
+- OSM map-matching, sidewalk graph, entrance classification
+- Full rep workflow (visit status, exports, save/load)
 - PDF export, Google/Apple Maps deep links
-- Crossing-count analytics, adjustable penalty weight sliders
-
----
-
-## Today’s 4-hour block (Wed Jun 17)
-
-Since Day 1 items 4–5 are still open, use today to finish the map slice:
-
-| Block | Task |
-|-------|------|
-| **0:00–0:30** | Add Mapbox CSS import; create `components/map/RouteMap.tsx` skeleton |
-| **0:30–1:30** | Render markers from `result.stops.filter(s => s.status === "valid")`; fit bounds; swap placeholder in `page.tsx` |
-| **1:30–2:00** | Create `data/sample-stops.csv`; add "Load sample" button |
-| **2:00–2:30** | Test invalid/duplicate/valid cases with pins |
-| **2:30–3:00** | `npm run build`; fix any client/server boundary issues |
-| **3:00–4:00** | Buffer — map styling, dark theme polish, or start geocode API research |
+- Further geocoding features (cache, ambiguity picker)
 
 ---
 
 ## Pace notes
 
-- At **4 hrs/day**, the 15-day plan maps roughly 1:1 to calendar days (weekends off in the table above).
-- If a day runs long, **don't stack** — push optimizer work rather than rushing geocoding.
-- **Day 7 (TSP)** is the highest-risk day; budget an extra half-day if OR-Tools setup is new to you.
+- At **4 hrs/day**, each day above ≈ one calendar day (weekends off).
+- **Highest-risk days:** A2 (OR-Tools / FastAPI setup), B1–B3 (penalty design). Budget extra half-days if needed.
+- **Do not stack** input/geocoding work — if behind, defer UI polish, not algorithm core.
+- Use the existing Simi Valley sample set as the primary benchmark dataset throughout.
+
+---
+
+## Quick reference: restriction → implementation
+
+| Project lead constraint | Implementation |
+|-------------------------|----------------|
+| Don't unnecessarily cross the street | `w_cross * crossing_penalty(i,j)` |
+| End near start | Round-trip TSP or return-to-depot cost term |
+| Follow the road | Mapbox walking matrix + Directions polylines |
+| No awkward zig-zags | `w_uturn`, `w_back` + block clustering |
+| Same side of street | `w_side * side_switch_penalty` (needs org data) |
