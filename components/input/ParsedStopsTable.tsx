@@ -69,12 +69,6 @@ function getStatusBadge(stop: ParsedStop) {
                 <span className="rounded-full bg-red-100 px-2 py-1 text-xs text-red-700">
                     Invalid
                 </span>
-
-                {stop.errors[0] && (
-                    <div className="text-xs text-red-600">
-                        {stop.errors[0]}
-                    </div>
-                )}
             </div>
         );
     }
