@@ -10,6 +10,15 @@ import { useStopGeocoding } from "@/lib/hooks/useStopGeocoding";
 import { fetchOptimize } from "@/lib/optimization/client";
 import type { OptimizeResponse } from "@/lib/optimization/types";
 
+function totalDurationForOrder(durations: number[][], order: number[]): number {
+  let total = 0;
+  for (let i = 0; i < order.length - 1; i++) {
+    total += durations[order[i]][order[i + 1]];
+  }
+
+  return total;
+}
+
 export default function Home() {
   const [text, setText] = useState("");
   const result = useMemo(() => { return parseCoordinateInput(text); }, [text]);
@@ -84,7 +93,7 @@ export default function Home() {
           disabled={isOptimizing || mapStops.length < 2}
           className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
           >
-            {isOptimizing ? "Building Matrix..." : "Optimize (A1 Test)"}
+            {isOptimizing ? "Optimizing..." : "Optimize"}
           </button>
 
           {optimizeError && (
@@ -92,18 +101,44 @@ export default function Home() {
           )}
 
           {optimizeResult && (
-            <div className="rounded-md border border-slate-600 bg-slate-800 p-3 text-xs font-mono text-slate-300">
+            <div className="rounded-md border border-slate-600 bg-slate-800 p-3 text-xs text-slate-300 space-y-2">
               <p>
-                Matrix: {optimizeResult.durations.length}x{optimizeResult.durations[0]?.length}
+                Visit Order: {" "}
+                <span className = "font-mono">
+                  {optimizeResult.order.map((index) => index + 1).join(" -> ")}
+                </span>
               </p>
+
               <p>
-                Sample 0-1:{" "}
-                {optimizeResult.durations[0]?.[1] != null
-                ? `${Math.round(optimizeResult.durations[0][1]!)}s walking` : "unreachable"}
+                Total Walk Time:{" "}
+                {Math.round(optimizeResult.totalDurationSeconds / 60)} min (
+                {Math.round(optimizeResult.totalDurationSeconds)}s)
               </p>
+
               <p>
-                order: {optimizeResult.order ?? "null (A2)"}
+                Optimized vs Paste Order: {" "}
+                {Math.round(optimizeResult.totalDurationSeconds / 60)} min vs{" "}
+                {Math.round(
+                  totalDurationForOrder(
+                    optimizeResult.durations,
+                    optimizeResult.stops.map((_, index) => index)
+                  ) / 60
+                )}{" "}
+                min
               </p>
+
+              <ol className = "list-decimal pl-4 space-y-1">
+                {optimizeResult.order.map((stopIndex, visitNumber) => {
+                  const stop = optimizeResult.stops[stopIndex];
+
+                  return (
+                    <li key={stop.id}>
+                      #{visitNumber + 1}: {stop.id} ({stop.lat.toFixed(5)}, {" "}
+                      {stop.lng.toFixed(5)})
+                    </li>
+                  );
+                })}
+              </ol>
             </div>
           )}
         </div>

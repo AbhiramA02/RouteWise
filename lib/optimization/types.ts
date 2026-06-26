@@ -9,15 +9,18 @@ export type OptimizeStopInput = {
 
 export type OptimizeRequest = {
     stops: OptimizeStopInput[];
+    startIndex?: number; // defaults to 0 if not provided
+    roundTrip?: boolean; // ignored for A2, will be implemented later
 };
 
 //Mapbox Matrix can return null when no route exists
-export type DurationMatrix = (number | null)[][];
-export type DistanceMatrix = (number | null)[][];
+export type DurationMatrix = number[][];
+export type DistanceMatrix = number[][];
 
 export type OptimizeResponse = {
     stops: OptimizeStopInput[];
     durations: DurationMatrix; //NxN walking seconds
     distances: DistanceMatrix; //NxN walking meters
-    order: number[] | null;
-}
+    order: number[]; // index of stops in order, no longer null
+    totalDurationSeconds: number;
+};
