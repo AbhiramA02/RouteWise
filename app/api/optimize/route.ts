@@ -1,11 +1,13 @@
 /* This file creates a backend endpoint that is called when Optimize is selected */
 /* Calls matrix.ts to get duration/distance matrices */
-/* Calls tsp.ts to solve and get the Order/Duration from theTSP */
+/* Calls tsp.ts to solve and get the Order/Duration from the TSP */
+/* Calls directions.ts to get the Complete Route Geometry */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getWalkingDurationMatrix } from "@/lib/mapbox/matrix";
 import type { OptimizeRequest, OptimizeResponse } from "@/lib/optimization/types";
 import { solveGreedyOpenTsp } from "@/lib/optimization/tsp";
+import { getWalkingDirections } from "@/lib/mapbox/directions";
 
 export async function POST(request: NextRequest) {
     let body: OptimizeRequest;
@@ -62,12 +64,31 @@ export async function POST(request: NextRequest) {
         const { durations, distances } = await getWalkingDurationMatrix(stops);
         const startIndex = body.startIndex ?? 0;
         const { order, totalCost } = solveGreedyOpenTsp(durations, { startIndex, });
+        const stopsInVisitOrder = order.map((index) => ({lng: stops[index].lng, lat: stops[index].lat}));
+
+        let routeGeometry = null;
+        let routeDurationSeconds = null;
+        let routeDistanceMeters = null;
+
+        try {
+            const directions = await getWalkingDirections(stopsInVisitOrder);
+
+            routeGeometry = directions.geometry;
+            routeDurationSeconds = directions.durationSeconds;
+            routeDistanceMeters = directions.distanceMeters;
+        } catch (directionsError) {
+            console.error("Directions failed:", directionsError);
+        }
+        
         const response: OptimizeResponse = {
             stops,
             durations,
             distances,
             order,
             totalDurationSeconds: totalCost,
+            routeGeometry,
+            routeDurationSeconds,
+            routeDistanceMeters,
         };
 
         return NextResponse.json(response);

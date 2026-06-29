@@ -13,6 +13,11 @@ export type OptimizeRequest = {
     roundTrip?: boolean; // ignored for A2, will be implemented later
 };
 
+export type RouteGeometry = {
+    type: "LineString";
+    coordinates: [number, number][]; // [lng, lat] pairs
+};
+
 //Mapbox Matrix can return null when no route exists
 export type DurationMatrix = number[][];
 export type DistanceMatrix = number[][];
@@ -23,4 +28,8 @@ export type OptimizeResponse = {
     distances: DistanceMatrix; //NxN walking meters
     order: number[]; // index of stops in order, no longer null
     totalDurationSeconds: number;
+
+    routeGeometry: RouteGeometry | null;
+    routeDurationSeconds: number | null;
+    routeDistanceMeters: number | null;
 };

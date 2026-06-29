@@ -43,7 +43,7 @@ export function RouteMap({ stops }: RouteMapProps) {
 
         const map = new mapboxgl.Map({
             container: containerRef.current,
-            style: "mapbox://stlyes/mapbox/streets-v12",
+            style: "mapbox://styles/mapbox/streets-v12",
             center: DEFAULT_CENTER,
             zoom: DEFAULT_ZOOM,
         });
