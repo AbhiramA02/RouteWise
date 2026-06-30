@@ -10,7 +10,7 @@ export type OptimizeStopInput = {
 export type OptimizeRequest = {
     stops: OptimizeStopInput[];
     startIndex?: number; // defaults to 0 if not provided
-    roundTrip?: boolean; // ignored for A2, will be implemented later
+    maxEndDistanceMeters?: number; // default 200 - "near start" radius
 };
 
 export type RouteGeometry = {
@@ -28,6 +28,13 @@ export type OptimizeResponse = {
     distances: DistanceMatrix; //NxN walking meters
     order: number[]; // index of stops in order, no longer null
     totalDurationSeconds: number;
+
+    // Loop-Style MetaData
+    startIndex: number;
+    endIndex: number;
+    endDistanceFromStartMeters: number;
+    endNearStart: boolean;
+    maxEndDistanceMeters: number;
 
     routeGeometry: RouteGeometry | null;
     routeDurationSeconds: number | null;
