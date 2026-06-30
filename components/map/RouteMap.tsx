@@ -9,16 +9,34 @@ type MapStop = {
     id: string;
     lat: number;
     lng: number;
+    visitNumber?: number;
 };
 
 type RouteMapProps = {
     stops: MapStop[];
+    routeGeometry?: {
+        type: "LineString";
+        coordinates: [number, number][];
+    } | null;
 };
 
 const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
 const DEFAULT_ZOOM = 12;
 
-export function RouteMap({ stops }: RouteMapProps) {
+function createMarkerElement(visitNumber?: number): HTMLElement {
+    const el = document.createElement("div");
+
+    if (visitNumber != null) {
+        el.className = "flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white shadow-md border-2 border-white";
+        el.textContent = String(visitNumber);
+    } else {
+        el.className = "h-4 w-4 rounded-full bg-blue-600 border-2 border-white shadow";
+    }
+
+    return el;
+}
+
+export function RouteMap({ stops, routeGeometry }: RouteMapProps) {
     /* Establish references (stored information) for Mapbox Map, Markers, and Container */
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -72,7 +90,8 @@ export function RouteMap({ stops }: RouteMapProps) {
         const bounds = new mapboxgl.LngLatBounds();
 
         for (const stop of stops) {
-            const marker = new mapboxgl.Marker({ color: "#3b82f6"})
+            const el = createMarkerElement(stop.visitNumber);
+            const marker = new mapboxgl.Marker({ element: el })
             .setLngLat([stop.lng, stop.lat])
             .addTo(map);
 
@@ -92,6 +111,61 @@ export function RouteMap({ stops }: RouteMapProps) {
             });
         }
     }, [stops]);
+
+    /* Updates Route Geometry when in Changes */
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) return;
+
+        const updateRoute = () => {
+            if (!routeGeometry || routeGeometry.coordinates.length === 0) {
+                // Remove layer if no route exists
+                if (map.getSource("route")) {
+                    if (map.getLayer("route-line")){
+                        map.removeLayer("route-line");
+                    }
+                    
+                    map.removeSource("route");
+                }
+                
+                return;
+            }
+
+            const geojson: GeoJSON.Feature = {
+                type: "Feature",
+                properties: {},
+                geometry: routeGeometry,
+            };
+
+            if (map.getSource("route")) {
+                (map.getSource("route") as mapboxgl.GeoJSONSource).setData(geojson);
+            } else {
+                map.addSource("route", { type: "geojson", data: geojson });
+                map.addLayer({
+                    id: "route-line",
+                    type: "line",
+                    source: "route",
+                    layout: { "line-join": "round", "line-cap": "round" },
+                    paint: {
+                        "line-color": "#3b82f6",
+                        "line-width": 4,
+                        "line-opacity": 0.85,
+                    },
+                });
+            }
+
+            const bounds = new mapboxgl.LngLatBounds();
+            routeGeometry.coordinates.forEach(([lng, lat]) => bounds.extend([lng, lat]));
+            stops.forEach((s) => bounds.extend([s.lng, s.lat]));
+            map.fitBounds(bounds, { padding: 60, maxZoom: 16 });
+        };
+
+        if (map.isStyleLoaded()) {
+            updateRoute();
+        } else {
+            map.once("load", updateRoute);
+        }
+    }, [routeGeometry, stops]);
 
     return (
         <div

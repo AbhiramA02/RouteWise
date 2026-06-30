@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { CoordinatePaste } from "@/components/input/CoordinatePaste";
 import { ParsedStopsTable } from "@/components/input/ParsedStopsTable";
 import { parseCoordinateInput } from "@/lib/validation/coordinates";
@@ -36,6 +36,30 @@ export default function Home() {
   const [optimizeResult, setOptimizeResult] = useState<OptimizeResponse | null>(null);
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
+
+  const displayStops = useMemo(() => {
+    if (!optimizeResult) {
+      return mapStops;
+    }
+
+    return optimizeResult.order.map((stopIndex, visitIndex) => {
+      const stop = mapStops[stopIndex];
+
+      if (!stop) {
+        return null;
+      }
+
+      return {
+        ...stop,
+        visitNumber: visitIndex + 1,
+      };
+    }).filter((stop) => stop !== null);
+  }, [optimizeResult, mapStops]);
+
+  useEffect(() => {
+    setOptimizeResult(null);
+    setOptimizeError(null);
+  }, [text]);
 
   async function handleOptimize() {
     if (mapStops.length < 2) {
@@ -82,7 +106,10 @@ export default function Home() {
           </section>
 
           <section className="min-h-[400px] rounded-lg border border-slate-700 bg-slate-900 p-4">
-            <RouteMap stops={mapStops} />
+            <RouteMap 
+            stops={displayStops} 
+            routeGeometry={optimizeResult?.routeGeometry ?? null}
+            />
           </section>
         </div>
 
@@ -126,6 +153,22 @@ export default function Home() {
                 )}{" "}
                 min
               </p>
+
+              {optimizeResult.routeDurationSeconds != null && (
+                <p>
+                  Route Walk Time: {" "}
+                  {Math.round(optimizeResult.routeDurationSeconds / 60)} min (
+                  {Math.round(optimizeResult.routeDurationSeconds)}s)
+                </p>
+              )}
+
+              {optimizeResult.routeDistanceMeters != null && (
+                <p>
+                  Route Disntance: {" "}
+                  {Math.round(optimizeResult.routeDistanceMeters / 1609).toFixed(2)} mi (
+                  {Math.round(optimizeResult.routeDistanceMeters)} m)
+                </p>
+              )}
 
               <ol className = "list-decimal pl-4 space-y-1">
                 {optimizeResult.order.map((stopIndex, visitNumber) => {
