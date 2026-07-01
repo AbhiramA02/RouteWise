@@ -10,6 +10,8 @@ type MapStop = {
     lat: number;
     lng: number;
     visitNumber?: number;
+    isStart?: boolean;
+    isEnd?: boolean;
 };
 
 type RouteMapProps = {
@@ -23,11 +25,14 @@ type RouteMapProps = {
 const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749];
 const DEFAULT_ZOOM = 12;
 
-function createMarkerElement(visitNumber?: number): HTMLElement {
+function createMarkerElement(visitNumber?: number, isStart?: boolean, isEnd?: boolean): HTMLElement {
     const el = document.createElement("div");
 
     if (visitNumber != null) {
-        el.className = "flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white shadow-md border-2 border-white";
+        let bg = "bg-blue-600";
+        if (isStart) bg = "bg-green-600";
+        if (isEnd && !isStart) bg = "bg-amber-600";
+        el.className = `flex h-7 w-7 items-center justify-center rounded-full ${bg} text-xs font-bold text-white shadow-md border-2 border-white`;
         el.textContent = String(visitNumber);
     } else {
         el.className = "h-4 w-4 rounded-full bg-blue-600 border-2 border-white shadow";
@@ -90,7 +95,7 @@ export function RouteMap({ stops, routeGeometry }: RouteMapProps) {
         const bounds = new mapboxgl.LngLatBounds();
 
         for (const stop of stops) {
-            const el = createMarkerElement(stop.visitNumber);
+            const el = createMarkerElement(stop.visitNumber, stop.isStart, stop.isEnd);
             const marker = new mapboxgl.Marker({ element: el })
             .setLngLat([stop.lng, stop.lat])
             .addTo(map);

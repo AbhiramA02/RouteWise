@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWalkingDurationMatrix } from "@/lib/mapbox/matrix";
 import type { OptimizeRequest, OptimizeResponse } from "@/lib/optimization/types";
-import { solveGreedyOpenTsp } from "@/lib/optimization/tsp";
+import { solveGreedyLoopTsp } from "@/lib/optimization/tsp";
 import { getWalkingDirections } from "@/lib/mapbox/directions";
 
 export async function POST(request: NextRequest) {
@@ -60,10 +60,23 @@ export async function POST(request: NextRequest) {
         }
     }
 
+    // Validate maxEndDistanceMeters
+    if (body.maxEndDistanceMeters != null) {
+        if (typeof body.maxEndDistanceMeters !== "number" || body.maxEndDistanceMeters <= 0) {
+            return NextResponse.json(
+                { error: "maxEndDistanceMeters must be a positive number" },
+                { status: 400 }
+            );
+        }
+    }
+
     try {
         const { durations, distances } = await getWalkingDurationMatrix(stops);
+
         const startIndex = body.startIndex ?? 0;
-        const { order, totalCost } = solveGreedyOpenTsp(durations, { startIndex, });
+        const maxEndDistanceMeters = body.maxEndDistanceMeters ?? 200;
+
+        const { order, totalCost, endIndex, endDistanceFromStartMeters, endsNearStart } = solveGreedyLoopTsp(durations, distances, { startIndex, maxEndDistanceMeters});
         const stopsInVisitOrder = order.map((index) => ({lng: stops[index].lng, lat: stops[index].lat}));
 
         let routeGeometry = null;
@@ -86,6 +99,11 @@ export async function POST(request: NextRequest) {
             distances,
             order,
             totalDurationSeconds: totalCost,
+            startIndex,
+            endIndex,
+            endDistanceFromStartMeters,
+            endsNearStart,
+            maxEndDistanceMeters,
             routeGeometry,
             routeDurationSeconds,
             routeDistanceMeters,

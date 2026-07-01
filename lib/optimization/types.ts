@@ -33,7 +33,7 @@ export type OptimizeResponse = {
     startIndex: number;
     endIndex: number;
     endDistanceFromStartMeters: number;
-    endNearStart: boolean;
+    endsNearStart: boolean;
     maxEndDistanceMeters: number;
 
     routeGeometry: RouteGeometry | null;

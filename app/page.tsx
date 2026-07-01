@@ -9,6 +9,7 @@ import { SAMPLE_STOPS_TEXT } from "@/data/sample-stops"; /* Import Sample Stops 
 import { useStopGeocoding } from "@/lib/hooks/useStopGeocoding";
 import { fetchOptimize } from "@/lib/optimization/client";
 import type { OptimizeResponse } from "@/lib/optimization/types";
+import { StartDepotPicker } from "@/components/route/StartDepotPicker";
 
 function totalDurationForOrder(durations: number[][], order: number[]): number {
   let total = 0;
@@ -21,6 +22,7 @@ function totalDurationForOrder(durations: number[][], order: number[]): number {
 
 export default function Home() {
   const [text, setText] = useState("");
+  const [startIndex, setStartIndex] = useState(0);
   const result = useMemo(() => { return parseCoordinateInput(text); }, [text]);
 
   const parsedStops = useMemo(() => result.stops, [result]);
@@ -42,6 +44,8 @@ export default function Home() {
       return mapStops;
     }
 
+    const lastOrderIndex = optimizeResult.order.length - 1;
+
     return optimizeResult.order.map((stopIndex, visitIndex) => {
       const stop = mapStops[stopIndex];
 
@@ -52,9 +56,21 @@ export default function Home() {
       return {
         ...stop,
         visitNumber: visitIndex + 1,
+        isStart: stopIndex === optimizeResult.startIndex,
+        isEnd: visitIndex === lastOrderIndex,
       };
     }).filter((stop) => stop !== null);
   }, [optimizeResult, mapStops]);
+
+  useEffect(() => {
+    if (mapStops.length === 0) {
+      setStartIndex(0);
+      return;
+    }
+    if (startIndex >= mapStops.length) {
+      setStartIndex(0);
+    }
+  }, [mapStops.length, startIndex]);
 
   useEffect(() => {
     setOptimizeResult(null);
@@ -71,7 +87,7 @@ export default function Home() {
     setOptimizeError(null);
 
     try { // Sends Request to Optimization API
-      const response = await fetchOptimize({ stops: mapStops });
+      const response = await fetchOptimize({ stops: mapStops, startIndex, });
       setOptimizeResult(response);
     } catch (error) {
       setOptimizeError(error instanceof Error ? error.message : "Optimization failed");
@@ -79,6 +95,13 @@ export default function Home() {
       setIsOptimizing(false);
     }
   }
+
+  const stopOptions = useMemo(() => 
+    mapStops.map((stop, index) => ({
+      id: stop.id,
+      label: `Stop ${index + 1}`,
+    })),
+  [mapStops]);
 
   return (
     <main className="min-h-screen bg-slate-950 p-6">
@@ -114,6 +137,12 @@ export default function Home() {
         </div>
 
         <div className="mt-4 space-y-3">
+          <StartDepotPicker
+          stops={stopOptions}
+          startIndex={startIndex}
+          onStartIndexChange={setStartIndex}
+          />
+
           <button
           type = "button"
           onClick={handleOptimize}
@@ -140,6 +169,24 @@ export default function Home() {
                 Total Walk Time:{" "}
                 {Math.round(optimizeResult.totalDurationSeconds / 60)} min (
                 {Math.round(optimizeResult.totalDurationSeconds)}s)
+              </p>
+
+              <p>
+                Start: stop {(optimizeResult.startIndex ?? 0) + 1} · End: stop {" "}
+                {optimizeResult.endIndex + 1}
+              </p>
+
+              <p>
+                Finish distance from start: {" "}
+                {Math.round(optimizeResult.endDistanceFromStartMeters)} m
+                {optimizeResult.endsNearStart ? (
+                  <span className="text-green-400"> (within 200 m) </span>
+                ) : (
+                  <span className="text-amber-400">
+                    {" "}
+                    (outside {optimizeResult.maxEndDistanceMeters} m - closest available)
+                  </span>
+                )}
               </p>
 
               <p>
