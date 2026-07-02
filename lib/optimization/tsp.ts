@@ -1,4 +1,5 @@
 /* This file utilizes the Distance/Durations Matrices to contruct the TSP Route */
+import { clusterByWalkingDistance, findClusterContaining, minCostBetweenClusters, } from "@/lib/optimization/cluster";
 
 export type TspOptions = {
     startIndex?: number;
@@ -22,6 +23,10 @@ export type LoopTspResult = TspResult & {
 };
 
 const DEFAULT_MAX_END_DISTANCE_METERS = 200;
+
+export type ClusteredLoopTspResult = LoopTspResult & {
+    clusters: number[][];
+};
 
 function findClosestEndCandidate(distances: number[][], startIndex: number, excludeIndex: number): number {
     let bestIndex = -1;
@@ -152,6 +157,239 @@ export function solveGreedyLoopTsp(durations: number[][], distances: number[][],
 
     if (!best) {
         throw new Error("Failed to build loop route");
+    }
+
+    return best;
+}
+
+// Identifies order of stops within a cluster
+export function orderWithinCluster(cost: number[][], clusterStops: number[], entryIndex: number, exitIndex?: number): { order: number[], totalCost: number } {
+    if (clusterStops.length === 0) {
+        return { order: [], totalCost: 0 };
+    }
+
+    if (!clusterStops.includes(entryIndex)) {
+        throw new Error("entryIndex must be in cluster");
+    }
+
+    const remaining = new Set(clusterStops);
+    const order: number[] = [entryIndex];
+    remaining.delete(entryIndex);
+
+    let totalCost = 0;
+    let current = entryIndex;
+
+    const targetSize = exitIndex != null && remaining.has(exitIndex) ? clusterStops.length - 1 : clusterStops.length;
+
+    while (order.length < targetSize) {
+        let bestNext = -1;
+        let bestCost = Number.POSITIVE_INFINITY;
+
+        for (const candidate of remaining) {
+            if (exitIndex != null && candidate === exitIndex) continue;
+
+            const legCost = cost[current][candidate];
+            if (legCost < bestCost) {
+                bestCost = legCost;
+                bestNext = candidate;
+            }
+        }
+
+        if (bestNext === -1 || !Number.isFinite(bestCost)) {
+            throw new Error("No reachable stop remains in cluster");
+        }
+
+        order.push(bestNext);
+        remaining.delete(bestNext);
+        totalCost += bestCost;
+        current = bestNext;
+    }
+
+    if (exitIndex != null && remaining.has(exitIndex)) {
+        const finalLeg = cost[current][exitIndex];
+        if (!Number.isFinite(finalLeg)) {
+            throw new Error("No route to cluster exit");
+        }
+
+        order.push(exitIndex);
+        totalCost += finalLeg;
+    }
+
+    return { order, totalCost };
+}
+
+function closestStopInClusterTo(cost: number[][], clusterStops: number[], fromStop: number): number {
+    let best = clusterStops[0];
+    let bestCost = Number.POSITIVE_INFINITY;
+
+    for (const stop of clusterStops) {
+        const leg = cost[fromStop][stop];
+        if (leg < bestCost) {
+            bestCost = leg;
+            best = stop;
+        }
+    }
+
+    return best;
+}
+
+function buildClusteredRoute(durations: number[][], distances: number[][], clusters: number[][], startIndex: number, endIndex: number, maxEndDistanceMeters: number): ClusteredLoopTspResult {
+    const startClusterIdx = findClusterContaining(clusters, startIndex);
+    const endClusterIdx = findClusterContaining(clusters, endIndex);
+
+    // Start and end in the same cluster: flat open-path TSP preserves end-last semantics.
+    if (startClusterIdx === endClusterIdx) {
+        const result = solveGreedyOpenTsp(durations, { startIndex, endIndex });
+        const endDistanceFromStartMeters = distances[endIndex][startIndex];
+        return {
+            ...result,
+            endIndex,
+            endDistanceFromStartMeters,
+            endsNearStart: endDistanceFromStartMeters <= maxEndDistanceMeters,
+            clusters,
+        };
+    }
+
+    const visitedClusters = new Set<number>();
+    const clusterOrder: number[] = [startClusterIdx];
+    visitedClusters.add(startClusterIdx);
+
+    let currentClusterIdx = startClusterIdx;
+
+    // Greedy Inter-Cluster TSP
+    while (clusterOrder.length < clusters.length) {
+        let bestNext = -1;
+        let bestCost = Number.POSITIVE_INFINITY;
+
+        for (let c = 0; c < clusters.length; c++) {
+            if (visitedClusters.has(c)) continue;
+            const cost = minCostBetweenClusters(durations, clusters[currentClusterIdx], clusters[c]);
+            if (cost < bestCost) {
+                bestCost = cost;
+                bestNext = c;
+            }
+        }
+
+        if (bestNext === -1) break;
+
+        clusterOrder.push(bestNext);
+        visitedClusters.add(bestNext);
+        currentClusterIdx = bestNext;
+    }
+
+    // End cluster must be visited last so endIndex is the final stop.
+    const endClusterPosition = clusterOrder.indexOf(endClusterIdx);
+    if (endClusterPosition !== -1 && endClusterPosition !== clusterOrder.length - 1) {
+        clusterOrder.splice(endClusterPosition, 1);
+        clusterOrder.push(endClusterIdx);
+    }
+
+    // Walk clusters in order, building global visit order
+    const globalOrder: number[] = [];
+    let totalCost = 0;
+    let previousExit: number | null = null;
+
+    for (let ci = 0; ci < clusterOrder.length; ci++) {
+        const clusterIdx = clusterOrder[ci];
+        const clusterStops = clusters[clusterIdx];
+        const isFirst = ci === 0;
+        const isLast = ci === clusterOrder.length - 1;
+
+        let entry: number;
+        if (isFirst) {
+            entry = startIndex;
+        } else {
+            entry = closestStopInClusterTo(durations, clusterStops, previousExit!);
+        }
+
+        const exit = isLast && clusterIdx === endClusterIdx ? endIndex : undefined;
+        const { order: intraOrder, totalCost: intraCost } = orderWithinCluster(durations, clusterStops, entry, exit);
+
+        if(!isFirst && previousExit != null) {
+            totalCost += durations[previousExit][intraOrder[0]];
+        }
+
+        totalCost += intraCost;
+        globalOrder.push(...intraOrder);
+        previousExit = intraOrder[intraOrder.length - 1];
+    }
+
+    if (globalOrder[globalOrder.length - 1] !== endIndex) {
+        throw new Error("End stop is not last in visit order");
+    }
+
+    const endDistanceFromStartMeters = distances[endIndex][startIndex];
+
+    return { order: globalOrder, totalCost, endIndex, endDistanceFromStartMeters, endsNearStart: endDistanceFromStartMeters <= maxEndDistanceMeters, clusters };
+}
+
+export function solveClusteredLoopTsp(durations: number[][], distances: number[][], options: LoopTspOptions & { clusterThresholdMeters?: number } = {}): ClusteredLoopTspResult {
+    const n = durations.length;
+    const startIndex = options.startIndex ?? 0;
+    const maxEndDistanceMeters = options.maxEndDistanceMeters ?? DEFAULT_MAX_END_DISTANCE_METERS;
+    const clusterThresholdMeters = options.clusterThresholdMeters ?? 150;
+
+    // Small Routes: fall back to flat loop TSP
+    if (n <= 3) {
+        const flat = solveGreedyLoopTsp(durations, distances, options);
+        return {...flat, clusters: [Array.from({ length: n }, (_, i) => i)] };
+    }
+
+    const clusters = clusterByWalkingDistance(distances, {
+        thresholdMeters: clusterThresholdMeters,
+    });
+
+    // Single Cluster: same as flat but we know clustering didn't help
+    if (clusters.length === 1) {
+        const flat = solveGreedyLoopTsp(durations, distances, options);
+        return {...flat, clusters };
+    }
+
+    const startClusterIdx = findClusterContaining(clusters, startIndex);
+
+    // Prefer end stops outside the start cluster so the end visit can be last.
+    let endCandidates = Array.from({ length: n }, (_, i) => i).filter((i) => {
+        if (i === startIndex) return false;
+        if (distances[i][startIndex] > maxEndDistanceMeters) return false;
+        return findClusterContaining(clusters, i) !== startClusterIdx;
+    });
+
+    // Fallback: closest stops outside the start cluster (may exceed maxEndDistanceMeters).
+    if (endCandidates.length === 0) {
+        endCandidates = Array.from({ length: n }, (_, i) => i)
+            .filter((i) => i !== startIndex)
+            .filter((i) => findClusterContaining(clusters, i) !== startClusterIdx)
+            .sort((a, b) => distances[a][startIndex] - distances[b][startIndex]);
+    }
+
+    let best: ClusteredLoopTspResult | null = null;
+
+    for (const endIndex of endCandidates) {
+        const endClusterIdx = findClusterContaining(clusters, endIndex);
+        if (endClusterIdx === startClusterIdx) {
+            continue;
+        }
+
+        try {
+            const candidate = buildClusteredRoute(
+                durations,
+                distances,
+                clusters,
+                startIndex,
+                endIndex,
+                maxEndDistanceMeters
+            );
+            if (!best || candidate.totalCost < best.totalCost) {
+                best = candidate;
+            }
+        } catch {
+            continue;
+        }
+    }
+
+    if (!best) {
+        const flat = solveGreedyLoopTsp(durations, distances, options);
+        return {...flat, clusters };
     }
 
     return best;

@@ -165,6 +165,14 @@ export default function Home() {
                 </span>
               </p>
 
+              {optimizeResult.clusters && (
+                <p>
+                  Clusters: {optimizeResult.clusters.length} (
+                    {optimizeResult.clusters.map((c) => `[${c.stopIndices.map((i) => i + 1).join(", ")}]`).join(" · ")}
+                  )
+                </p>
+              )}
+
               <p>
                 Total Walk Time:{" "}
                 {Math.round(optimizeResult.totalDurationSeconds / 60)} min (

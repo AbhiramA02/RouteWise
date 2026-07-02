@@ -36,6 +36,8 @@ export type OptimizeResponse = {
     endsNearStart: boolean;
     maxEndDistanceMeters: number;
 
+    clusters?: StopCluster[];
+
     routeGeometry: RouteGeometry | null;
     routeDurationSeconds: number | null;
     routeDistanceMeters: number | null;

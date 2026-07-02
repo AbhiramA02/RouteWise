@@ -6,8 +6,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWalkingDurationMatrix } from "@/lib/mapbox/matrix";
 import type { OptimizeRequest, OptimizeResponse } from "@/lib/optimization/types";
-import { solveGreedyLoopTsp } from "@/lib/optimization/tsp";
 import { getWalkingDirections } from "@/lib/mapbox/directions";
+import { solveClusteredLoopTsp } from "@/lib/optimization/tsp";
 
 export async function POST(request: NextRequest) {
     let body: OptimizeRequest;
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
         const startIndex = body.startIndex ?? 0;
         const maxEndDistanceMeters = body.maxEndDistanceMeters ?? 200;
 
-        const { order, totalCost, endIndex, endDistanceFromStartMeters, endsNearStart } = solveGreedyLoopTsp(durations, distances, { startIndex, maxEndDistanceMeters});
+        const { order, totalCost, endIndex, endDistanceFromStartMeters, endsNearStart, clusters, } = solveClusteredLoopTsp(durations, distances, { startIndex, maxEndDistanceMeters});
         const stopsInVisitOrder = order.map((index) => ({lng: stops[index].lng, lat: stops[index].lat}));
 
         let routeGeometry = null;
@@ -104,6 +104,7 @@ export async function POST(request: NextRequest) {
             endDistanceFromStartMeters,
             endsNearStart,
             maxEndDistanceMeters,
+            clusters: clusters.map((stopIndices, id) => ({ id, stopIndices })),
             routeGeometry,
             routeDurationSeconds,
             routeDistanceMeters,
