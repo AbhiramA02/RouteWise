@@ -40,3 +40,13 @@ export type OptimizeResponse = {
     routeDurationSeconds: number | null;
     routeDistanceMeters: number | null;
 };
+
+export type StopCluster = {
+    id: number;
+    stopIndices: number[];
+};
+
+export type ClusteringResult = {
+    clusters: StopCluster[];
+    clusterCount: number;
+};
