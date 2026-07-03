@@ -1,5 +1,7 @@
 /* This file utilizes the Distance/Durations Matrices to contruct the TSP Route */
 import { clusterByWalkingDistance, findClusterContaining, minCostBetweenClusters, } from "@/lib/optimization/cluster";
+import { type PenaltyWeights, DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types";
+import { type StopCoord, detectionDominantAxis, effectiveLegCost, nextSweepSign, type LegPenaltyContext, project } from "@/lib/optimization/penalties";
 
 export type TspOptions = {
     startIndex?: number;
@@ -14,6 +16,8 @@ export type TspResult = {
 export type LoopTspOptions = {
     startIndex?: number;
     maxEndDistanceMeters?: number;
+    penaltyWeights?: PenaltyWeights;
+    stops?: StopCoord[];
 };
 
 export type LoopTspResult = TspResult & {
@@ -27,6 +31,13 @@ const DEFAULT_MAX_END_DISTANCE_METERS = 200;
 export type ClusteredLoopTspResult = LoopTspResult & {
     clusters: number[][];
 };
+
+export type TspSolveContext = {
+    stops: StopCoord[];
+    penaltyWeights?: PenaltyWeights;
+    /* Indices to use for dominant-axis detection (cluster stops or all). */
+    axisIndices?: number[];
+}
 
 function findClosestEndCandidate(distances: number[][], startIndex: number, excludeIndex: number): number {
     let bestIndex = -1;
@@ -49,7 +60,7 @@ function findClosestEndCandidate(distances: number[][], startIndex: number, excl
 }
 
 // Greedy Nearest-Neighbor Open-Path TSP Solver
-export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}): TspResult {
+export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}, solveContext?: TspSolveContext): TspResult {
     const n = cost.length;
     if (n === 0) {return { order: [], totalCost: 0 };}
     if (n === 1) {return { order: [0], totalCost: 0 };}
@@ -80,6 +91,14 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}): 
     // Visit until only end remains (if fixed), or until all visited 
     const targetLength = endIndex != null ? n - 1 : n;
 
+    const weights = solveContext?.penaltyWeights; // Existing Penalty Weights?
+    const usePenalties = weights != null && solveContext != null;
+    const axisIndices = solveContext?.axisIndices ?? Array.from({ length: cost.length }, (_, i) => i); // Detect Dominant Axis
+    const axis = usePenalties ? detectionDominantAxis(solveContext!.stops, axisIndices) : "lng";
+
+    let sweepSign: 1 | -1 | null = null;
+    let prev: number | null = null;
+
     // Selects the Unvisited Stops that is closest to the Current Stop
     while (order.length < targetLength) {
         let bestNext = -1;
@@ -89,7 +108,13 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}): 
             if (visited.has(candidate)) continue;
             if (endIndex != null && candidate === endIndex) continue;
 
-            const legCost = cost[current][candidate];
+            let legCost: number;
+            if (usePenalties) {
+                const ctx: LegPenaltyContext = { stops: solveContext!.stops, axis, sweepSign, prevIndex: prev, currentIndex: current, weights: weights! };
+                legCost = effectiveLegCost(cost, ctx, candidate);
+            } else {
+                legCost = cost[current][candidate];
+            }
 
             if (legCost < bestCost) {
                 bestCost = legCost;
@@ -104,6 +129,13 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}): 
         order.push(bestNext);
         visited.add(bestNext);
         totalCost += bestCost;
+
+        if (usePenalties) {
+            const ctx: LegPenaltyContext = { stops: solveContext!.stops, axis, sweepSign, prevIndex: prev, currentIndex: current, weights: weights! };
+            sweepSign = nextSweepSign(ctx, bestNext);
+        }
+        
+        prev = current;
         current = bestNext;
     }
 
@@ -119,7 +151,7 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}): 
     return { order, totalCost };
 }
 
-export function solveGreedyLoopTsp(durations: number[][], distances: number[][], options: LoopTspOptions = {}): LoopTspResult {
+export function solveGreedyLoopTsp(durations: number[][], distances: number[][], options: LoopTspOptions = {}, solveContext?: TspSolveContext): LoopTspResult {
     const n = durations.length;
     const startIndex = options.startIndex ?? 0;
     const maxEndDistanceMeters = options.maxEndDistanceMeters ?? DEFAULT_MAX_END_DISTANCE_METERS;
@@ -141,7 +173,7 @@ export function solveGreedyLoopTsp(durations: number[][], distances: number[][],
     let best: LoopTspResult | null = null;
 
     for (const endIndex of endCandidates) {
-        const result = solveGreedyOpenTsp(durations, { startIndex, endIndex });
+        const result = solveGreedyOpenTsp(durations, { startIndex, endIndex }, solveContext);
         const endDistanceFromStartMeters = distances[endIndex][startIndex];
         const candidate: LoopTspResult = {
             ...result,
@@ -162,8 +194,83 @@ export function solveGreedyLoopTsp(durations: number[][], distances: number[][],
     return best;
 }
 
+// Adds Serpentine Path as alternative to Greedy Nearest-Neighbor Open-Path TSP
+function solveSerpentineWithinCluster( durations: number[][], clusterStops: number[], entryIndex: number, exitIndex: number | undefined, stops: StopCoord[] ) : { order: number[]; totalCost: number } {
+    const axis = detectionDominantAxis(stops, clusterStops);
+    const sorted = [...clusterStops].sort((a, b) => project(stops[a], axis) - project(stops[b], axis));
+
+    const entryPos = sorted.indexOf(entryIndex);
+
+    if (entryPos === -1) {
+        throw new Error("entryIndex must be in cluster")
+    }
+
+    if (exitIndex != null && !clusterStops.includes(exitIndex)) {
+        throw new Error("exitIndex must be in cluster");
+    }
+
+    const buildSweepOrder = (direction: 1 | -1): number[] => {
+        const result: number[] = [entryIndex];
+        const used = new Set<number>([entryIndex]);
+
+        let i = entryPos + direction;
+
+        while (i >= 0 && i < sorted.length) {
+            const stop = sorted[i];
+
+            if (stop !== exitIndex) {
+                result.push(stop);
+                used.add(stop);
+            }
+
+            i += direction;
+        }
+
+        for (const stop of sorted) {
+            if (!used.has(stop) && stop !== exitIndex) {
+                result.push(stop);
+                used.add(stop);
+            }
+        }
+
+        if (exitIndex != null && !used.has(exitIndex)) {
+            result.push(exitIndex);
+        }
+
+        return result;
+    };
+
+    const computeBaseCost = (order: number[]): number => {
+        let total = 0;
+
+        for (let i = 0; i < order.length - 1; i++) {
+            const leg = durations[order[i]][order[i + 1]];
+
+            if (!Number.isFinite(leg)) {
+                return Number.POSITIVE_INFINITY;
+            }
+
+            total += leg;
+        }
+
+        return total;
+    };
+
+    const forwardOrder = buildSweepOrder(1);
+    const backwardOrder = buildSweepOrder(-1);
+
+    const forwardCost = computeBaseCost(forwardOrder);
+    const backwardCost = computeBaseCost(backwardOrder);
+
+    if (forwardCost <= backwardCost) {
+        return { order: forwardOrder, totalCost: forwardCost };
+    }
+
+    return { order: backwardOrder, totalCost: backwardCost };
+}
+
 // Identifies order of stops within a cluster
-export function orderWithinCluster(cost: number[][], clusterStops: number[], entryIndex: number, exitIndex?: number): { order: number[], totalCost: number } {
+export function orderWithinCluster(cost: number[][], clusterStops: number[], entryIndex: number, exitIndex?: number, solveContext?: TspSolveContext ): { order: number[], totalCost: number } {
     if (clusterStops.length === 0) {
         return { order: [], totalCost: 0 };
     }
@@ -172,12 +279,24 @@ export function orderWithinCluster(cost: number[][], clusterStops: number[], ent
         throw new Error("entryIndex must be in cluster");
     }
 
+    if (exitIndex != null && !clusterStops.includes(exitIndex)) {
+        throw new Error("exitIndex must be in cluster");
+    }
+
     const remaining = new Set(clusterStops);
     const order: number[] = [entryIndex];
     remaining.delete(entryIndex);
 
     let totalCost = 0;
     let current = entryIndex;
+
+    const weights = solveContext?.penaltyWeights; // Introducting Penalty Weights, similar to solveGreedyOpenTsp
+    const usePenalties = weights != null && solveContext != null;
+
+    const axis = usePenalties ? detectionDominantAxis(solveContext!.stops, clusterStops): "lng";
+
+    let sweepSign: 1 | -1 | null = null;
+    let prev: number | null = null;
 
     const targetSize = exitIndex != null && remaining.has(exitIndex) ? clusterStops.length - 1 : clusterStops.length;
 
@@ -188,7 +307,14 @@ export function orderWithinCluster(cost: number[][], clusterStops: number[], ent
         for (const candidate of remaining) {
             if (exitIndex != null && candidate === exitIndex) continue;
 
-            const legCost = cost[current][candidate];
+            let legCost: number;
+            if (usePenalties) {
+                const ctx: LegPenaltyContext = { stops: solveContext!.stops, axis, sweepSign, prevIndex: prev, currentIndex: current, weights: weights!, };
+                legCost = effectiveLegCost(cost, ctx, candidate);
+            } else {
+                legCost = cost[current][candidate];
+            }
+
             if (legCost < bestCost) {
                 bestCost = legCost;
                 bestNext = candidate;
@@ -199,10 +325,17 @@ export function orderWithinCluster(cost: number[][], clusterStops: number[], ent
             throw new Error("No reachable stop remains in cluster");
         }
 
+        if (usePenalties) {
+            const ctx: LegPenaltyContext = { stops: solveContext!.stops, axis, sweepSign, prevIndex: prev, currentIndex: current, weights: weights!, };
+            sweepSign = nextSweepSign(ctx, bestNext);
+        }
+
+        prev = current;
+        current = bestNext;
+
         order.push(bestNext);
         remaining.delete(bestNext);
         totalCost += bestCost;
-        current = bestNext;
     }
 
     if (exitIndex != null && remaining.has(exitIndex)) {
@@ -233,13 +366,13 @@ function closestStopInClusterTo(cost: number[][], clusterStops: number[], fromSt
     return best;
 }
 
-function buildClusteredRoute(durations: number[][], distances: number[][], clusters: number[][], startIndex: number, endIndex: number, maxEndDistanceMeters: number): ClusteredLoopTspResult {
+function buildClusteredRoute(durations: number[][], distances: number[][], clusters: number[][], startIndex: number, endIndex: number, maxEndDistanceMeters: number, solveContext?: TspSolveContext): ClusteredLoopTspResult {
     const startClusterIdx = findClusterContaining(clusters, startIndex);
     const endClusterIdx = findClusterContaining(clusters, endIndex);
 
     // Start and end in the same cluster: flat open-path TSP preserves end-last semantics.
     if (startClusterIdx === endClusterIdx) {
-        const result = solveGreedyOpenTsp(durations, { startIndex, endIndex });
+        const result = solveGreedyOpenTsp(durations, { startIndex, endIndex }, solveContext ? {...solveContext, axisIndices: clusters[startClusterIdx]} : undefined);
         const endDistanceFromStartMeters = distances[endIndex][startIndex];
         return {
             ...result,
@@ -303,7 +436,7 @@ function buildClusteredRoute(durations: number[][], distances: number[][], clust
         }
 
         const exit = isLast && clusterIdx === endClusterIdx ? endIndex : undefined;
-        const { order: intraOrder, totalCost: intraCost } = orderWithinCluster(durations, clusterStops, entry, exit);
+        const { order: intraOrder, totalCost: intraCost } = orderWithinCluster(durations, clusterStops, entry, exit, solveContext);
 
         if(!isFirst && previousExit != null) {
             totalCost += durations[previousExit][intraOrder[0]];
@@ -329,9 +462,14 @@ export function solveClusteredLoopTsp(durations: number[][], distances: number[]
     const maxEndDistanceMeters = options.maxEndDistanceMeters ?? DEFAULT_MAX_END_DISTANCE_METERS;
     const clusterThresholdMeters = options.clusterThresholdMeters ?? 150;
 
+    const solveContext: TspSolveContext | undefined = options.stops != null ? {
+        stops: options.stops,
+        penaltyWeights: options.penaltyWeights ?? DEFAULT_PENALTY_WEIGHTS,
+    } : undefined;
+
     // Small Routes: fall back to flat loop TSP
     if (n <= 3) {
-        const flat = solveGreedyLoopTsp(durations, distances, options);
+        const flat = solveGreedyLoopTsp(durations, distances, options, solveContext);
         return {...flat, clusters: [Array.from({ length: n }, (_, i) => i)] };
     }
 
@@ -341,7 +479,7 @@ export function solveClusteredLoopTsp(durations: number[][], distances: number[]
 
     // Single Cluster: same as flat but we know clustering didn't help
     if (clusters.length === 1) {
-        const flat = solveGreedyLoopTsp(durations, distances, options);
+        const flat = solveGreedyLoopTsp(durations, distances, options, solveContext);
         return {...flat, clusters };
     }
 
@@ -377,7 +515,8 @@ export function solveClusteredLoopTsp(durations: number[][], distances: number[]
                 clusters,
                 startIndex,
                 endIndex,
-                maxEndDistanceMeters
+                maxEndDistanceMeters,
+                solveContext
             );
             if (!best || candidate.totalCost < best.totalCost) {
                 best = candidate;
@@ -388,7 +527,7 @@ export function solveClusteredLoopTsp(durations: number[][], distances: number[]
     }
 
     if (!best) {
-        const flat = solveGreedyLoopTsp(durations, distances, options);
+        const flat = solveGreedyLoopTsp(durations, distances, options, solveContext);
         return {...flat, clusters };
     }
 

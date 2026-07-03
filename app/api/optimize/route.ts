@@ -8,6 +8,7 @@ import { getWalkingDurationMatrix } from "@/lib/mapbox/matrix";
 import type { OptimizeRequest, OptimizeResponse } from "@/lib/optimization/types";
 import { getWalkingDirections } from "@/lib/mapbox/directions";
 import { solveClusteredLoopTsp } from "@/lib/optimization/tsp";
+import { DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types";
 
 export async function POST(request: NextRequest) {
     let body: OptimizeRequest;
@@ -22,6 +23,8 @@ export async function POST(request: NextRequest) {
     }
 
     const { stops } = body;
+
+    const penaltyWeights = body.penaltyWeights ?? DEFAULT_PENALTY_WEIGHTS;
 
     if (!Array.isArray(stops) || stops.length < 2) {
         return NextResponse.json(
@@ -76,7 +79,7 @@ export async function POST(request: NextRequest) {
         const startIndex = body.startIndex ?? 0;
         const maxEndDistanceMeters = body.maxEndDistanceMeters ?? 200;
 
-        const { order, totalCost, endIndex, endDistanceFromStartMeters, endsNearStart, clusters, } = solveClusteredLoopTsp(durations, distances, { startIndex, maxEndDistanceMeters});
+        const { order, totalCost, endIndex, endDistanceFromStartMeters, endsNearStart, clusters, } = solveClusteredLoopTsp(durations, distances, { startIndex, maxEndDistanceMeters, stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })), penaltyWeights});
         const stopsInVisitOrder = order.map((index) => ({lng: stops[index].lng, lat: stops[index].lat}));
 
         let routeGeometry = null;
@@ -108,6 +111,7 @@ export async function POST(request: NextRequest) {
             routeGeometry,
             routeDurationSeconds,
             routeDistanceMeters,
+            penaltyWeights,
         };
 
         return NextResponse.json(response);

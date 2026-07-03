@@ -225,6 +225,13 @@ export default function Home() {
                 </p>
               )}
 
+              {optimizeResult.penaltyWeights && (
+                <p>
+                  Penalties: backtrack +{optimizeResult.penaltyWeights.wBacktrack}s ·
+                  uturn +{optimizeResult.penaltyWeights.wUturn}s
+                </p>
+              )}
+
               <ol className = "list-decimal pl-4 space-y-1">
                 {optimizeResult.order.map((stopIndex, visitNumber) => {
                   const stop = optimizeResult.stops[stopIndex];

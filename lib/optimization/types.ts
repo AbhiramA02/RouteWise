@@ -11,6 +11,7 @@ export type OptimizeRequest = {
     stops: OptimizeStopInput[];
     startIndex?: number; // defaults to 0 if not provided
     maxEndDistanceMeters?: number; // default 200 - "near start" radius
+    penaltyWeights?: PenaltyWeights; // uses defaults, but later we can implement custom weights
 };
 
 export type RouteGeometry = {
@@ -41,6 +42,9 @@ export type OptimizeResponse = {
     routeGeometry: RouteGeometry | null;
     routeDurationSeconds: number | null;
     routeDistanceMeters: number | null;
+
+    penaltyWeights?: PenaltyWeights;
+    totalPenaltySeconds?: number;
 };
 
 export type StopCluster = {
@@ -52,3 +56,14 @@ export type ClusteringResult = {
     clusters: StopCluster[];
     clusterCount: number;
 };
+
+export type PenaltyWeights = {
+    wBacktrack: number; // extra seconds for re-visiting stops
+    wUturn: number; // extra seconds for making a u-turn
+};
+
+export const DEFAULT_PENALTY_WEIGHTS: PenaltyWeights = { // Default Configuration
+    wBacktrack: 90,
+    wUturn: 120,
+};
+
