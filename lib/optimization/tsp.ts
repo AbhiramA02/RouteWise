@@ -196,8 +196,8 @@ export function solveGreedyLoopTsp(durations: number[][], distances: number[][],
 
 // Adds Serpentine Path as alternative to Greedy Nearest-Neighbor Open-Path TSP
 function solveSerpentineWithinCluster( durations: number[][], clusterStops: number[], entryIndex: number, exitIndex: number | undefined, stops: StopCoord[] ) : { order: number[]; totalCost: number } {
-    const axis = detectionDominantAxis(stops, clusterStops);
-    const sorted = [...clusterStops].sort((a, b) => project(stops[a], axis) - project(stops[b], axis));
+    const axis = detectionDominantAxis(stops, clusterStops); // Detect Dominant Axis
+    const sorted = [...clusterStops].sort((a, b) => project(stops[a], axis) - project(stops[b], axis)); // Sort Stops by Dominant Axis
 
     const entryPos = sorted.indexOf(entryIndex);
 
