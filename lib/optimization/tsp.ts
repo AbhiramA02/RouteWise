@@ -2,6 +2,7 @@
 import { type PenaltyWeights, DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types"; // Penalty Settings
 import { type StopCoord, detectionDominantAxis, effectiveLegCost, nextSweepSign, type LegPenaltyContext} from "@/lib/optimization/penalties";
 import { totalMatrixDuration } from "@/lib/optimization/metrics";
+import { improveOpenRoute2Opt } from "@/lib/optimization/two-opt";
 
 export type TspOptions = { // Configures low-level TSP solver
     startIndex?: number;
@@ -125,16 +126,21 @@ export function solveOpenRoute(durations: number[][], options: OpenRouteOptions 
         penaltyWeights: options.penaltyWeights ?? DEFAULT_PENALTY_WEIGHTS,
      } : undefined;
 
-     const { order, totalCost } = solveGreedyOpenTsp(durations, { startIndex }, solveContext);
+     // Seed order (still may use penalties)
+     const { order: greedyOrder } = solveGreedyOpenTsp(durations, { startIndex }, solveContext);
 
-     const totalDurationSeconds = totalMatrixDuration(durations, order);
-     const totalPenaltySeconds = totalCost - totalDurationSeconds;
+     // Improve walk-time with 2-Opt (matrix only)
+     const { order, totalDurationSeconds } = improveOpenRoute2Opt(durations, greedyOrder, { startIndex });
+
+     // Report walk time from improved order
+     const totalPenaltySeconds = 0;
+     const optimizationCost = totalDurationSeconds;
 
      return {
         order,
         totalDurationSeconds,
         totalPenaltySeconds,
-        optimizationCost: totalCost,
+        optimizationCost,
         startIndex,
      };
 }
