@@ -1,13 +1,13 @@
 /* This file utilizes the Distance/Durations Matrices to contruct the TSP Route */
 import { type PenaltyWeights, DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types"; // Penalty Settings
-import { type StopCoord, detectionDominantAxis, effectiveLegCost, nextSweepSign, type LegPenaltyContext, project } from "@/lib/optimization/penalties";
+import { type StopCoord, detectionDominantAxis, effectiveLegCost, nextSweepSign, type LegPenaltyContext} from "@/lib/optimization/penalties";
 
-export type TspOptions = {
+export type TspOptions = { // Configures low-level TSP solver
     startIndex?: number;
     endIndex?: number;
 };
 
-export type TspResult = {
+export type TspResult = { // Result
     order: number[];
     totalCost: number;
 };
@@ -19,7 +19,7 @@ export type TspSolveContext = {
     axisIndices?: number[];
 }
 
-export type OpenRouteOptions = {
+export type OpenRouteOptions = { // Inputs for MVP Route Solver
     startIndex?: number;
     penaltyWeights?: PenaltyWeights;
     stops?: StopCoord[];
@@ -27,12 +27,13 @@ export type OpenRouteOptions = {
 
 export type OpenRouteResult = {
     order: number[];
-    totalDurationSeconds: number;
-    totalPenaltySeconds: number;
-    optimizationCost: number;
+    totalDurationSeconds: number; // Mapbox walking time in seconds
+    totalPenaltySeconds: number; // Penalty cost in seconds
+    optimizationCost: number; // Total cost in seconds (minimized by solver)
     startIndex: number;
 };
 
+// Computes real walking time after order is solved (without penalties).
 function sumMatrixDuration(durations: number[][], order: number[]): number {
     let total = 0;
     for (let i = 0; i < order.length - 1; i++) {
@@ -91,6 +92,7 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}, s
             if (visited.has(candidate)) continue;
             if (endIndex != null && candidate === endIndex) continue;
 
+            // Takes into account penalties if enabled
             let legCost: number;
             if (usePenalties) {
                 const ctx: LegPenaltyContext = { stops: solveContext!.stops, axis, sweepSign, prevIndex: prev, currentIndex: current, weights: weights! };
@@ -120,15 +122,6 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}, s
         
         prev = current;
         current = bestNext;
-    }
-
-    if (endIndex != null) {
-        const finalLeg = cost[current][endIndex];
-        if (!Number.isFinite(finalLeg)) {
-            throw new Error("No walking route to fixed end stop");
-        }
-        order.push(endIndex);
-        totalCost += finalLeg;
     }
 
     return { order, totalCost };
