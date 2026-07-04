@@ -44,8 +44,6 @@ export default function Home() {
       return mapStops;
     }
 
-    const lastOrderIndex = optimizeResult.order.length - 1;
-
     return optimizeResult.order.map((stopIndex, visitIndex) => {
       const stop = mapStops[stopIndex];
 
@@ -56,8 +54,7 @@ export default function Home() {
       return {
         ...stop,
         visitNumber: visitIndex + 1,
-        isStart: stopIndex === optimizeResult.startIndex,
-        isEnd: visitIndex === lastOrderIndex,
+        isStart: visitIndex === 0,
       };
     }).filter((stop) => stop !== null);
   }, [optimizeResult, mapStops]);
@@ -165,14 +162,6 @@ export default function Home() {
                 </span>
               </p>
 
-              {optimizeResult.clusters && (
-                <p>
-                  Clusters: {optimizeResult.clusters.length} (
-                    {optimizeResult.clusters.map((c) => `[${c.stopIndices.map((i) => i + 1).join(", ")}]`).join(" · ")}
-                  )
-                </p>
-              )}
-
               <p>
                 Total Walk Time:{" "}
                 {Math.round(optimizeResult.totalDurationSeconds / 60)} min (
@@ -180,21 +169,7 @@ export default function Home() {
               </p>
 
               <p>
-                Start: stop {(optimizeResult.startIndex ?? 0) + 1} · End: stop {" "}
-                {optimizeResult.endIndex + 1}
-              </p>
-
-              <p>
-                Finish distance from start: {" "}
-                {Math.round(optimizeResult.endDistanceFromStartMeters)} m
-                {optimizeResult.endsNearStart ? (
-                  <span className="text-green-400"> (within 200 m) </span>
-                ) : (
-                  <span className="text-amber-400">
-                    {" "}
-                    (outside {optimizeResult.maxEndDistanceMeters} m - closest available)
-                  </span>
-                )}
+                Start: stop {(optimizeResult.startIndex ?? 0) + 1}
               </p>
 
               <p>
@@ -219,18 +194,19 @@ export default function Home() {
 
               {optimizeResult.routeDistanceMeters != null && (
                 <p>
-                  Route Disntance: {" "}
+                  Route Distance: {" "}
                   {Math.round(optimizeResult.routeDistanceMeters / 1609).toFixed(2)} mi (
                   {Math.round(optimizeResult.routeDistanceMeters)} m)
                 </p>
               )}
 
-              {optimizeResult.penaltyWeights && (
-                <p>
-                  Penalties: backtrack +{optimizeResult.penaltyWeights.wBacktrack}s ·
-                  uturn +{optimizeResult.penaltyWeights.wUturn}s
-                </p>
-              )}
+              <p>
+                  Penalty Cost:{" "} {Math.round(optimizeResult.totalPenaltySeconds)}s
+              </p>
+
+              <p>
+                  Optimization Cost:{" "} {Math.round(optimizeResult.optimizationCost)}s
+              </p>
 
               <ol className = "list-decimal pl-4 space-y-1">
                 {optimizeResult.order.map((stopIndex, visitNumber) => {

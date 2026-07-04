@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getWalkingDurationMatrix } from "@/lib/mapbox/matrix";
 import type { OptimizeRequest, OptimizeResponse } from "@/lib/optimization/types";
 import { getWalkingDirections } from "@/lib/mapbox/directions";
-import { solveClusteredLoopTsp } from "@/lib/optimization/tsp";
+import { solveOpenRoute } from "@/lib/optimization/tsp";
 import { DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types";
 
 export async function POST(request: NextRequest) {
@@ -63,24 +63,21 @@ export async function POST(request: NextRequest) {
         }
     }
 
-    // Validate maxEndDistanceMeters
-    if (body.maxEndDistanceMeters != null) {
-        if (typeof body.maxEndDistanceMeters !== "number" || body.maxEndDistanceMeters <= 0) {
-            return NextResponse.json(
-                { error: "maxEndDistanceMeters must be a positive number" },
-                { status: 400 }
-            );
-        }
-    }
-
     try {
         const { durations, distances } = await getWalkingDurationMatrix(stops);
 
         const startIndex = body.startIndex ?? 0;
-        const maxEndDistanceMeters = body.maxEndDistanceMeters ?? 200;
 
-        const { order, totalCost, endIndex, endDistanceFromStartMeters, endsNearStart, clusters, } = solveClusteredLoopTsp(durations, distances, { startIndex, maxEndDistanceMeters, stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })), penaltyWeights});
-        const stopsInVisitOrder = order.map((index) => ({lng: stops[index].lng, lat: stops[index].lat}));
+        const { order, totalDurationSeconds, totalPenaltySeconds, optimizationCost, } = solveOpenRoute(durations, {
+            startIndex,
+            stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })),
+            penaltyWeights,
+        });
+
+        const stopsInVisitOrder = order.map((index) => ({
+            lng: stops[index].lng, 
+            lat: stops[index].lat
+        }));
 
         let routeGeometry = null;
         let routeDurationSeconds = null;
@@ -101,17 +98,14 @@ export async function POST(request: NextRequest) {
             durations,
             distances,
             order,
-            totalDurationSeconds: totalCost,
             startIndex,
-            endIndex,
-            endDistanceFromStartMeters,
-            endsNearStart,
-            maxEndDistanceMeters,
-            clusters: clusters.map((stopIndices, id) => ({ id, stopIndices })),
+            totalDurationSeconds,
+            totalPenaltySeconds,
+            optimizationCost,
             routeGeometry,
             routeDurationSeconds,
             routeDistanceMeters,
-            penaltyWeights,
+            penaltyWeights
         };
 
         return NextResponse.json(response);

@@ -10,7 +10,6 @@ export type OptimizeStopInput = {
 export type OptimizeRequest = {
     stops: OptimizeStopInput[];
     startIndex?: number; // defaults to 0 if not provided
-    maxEndDistanceMeters?: number; // default 200 - "near start" radius
     penaltyWeights?: PenaltyWeights; // uses defaults, but later we can implement custom weights
 };
 
@@ -28,23 +27,18 @@ export type OptimizeResponse = {
     durations: DurationMatrix; //NxN walking seconds
     distances: DistanceMatrix; //NxN walking meters
     order: number[]; // index of stops in order, no longer null
-    totalDurationSeconds: number;
+    startIndex: number;
 
     // Loop-Style MetaData
-    startIndex: number;
-    endIndex: number;
-    endDistanceFromStartMeters: number;
-    endsNearStart: boolean;
-    maxEndDistanceMeters: number;
-
-    clusters?: StopCluster[];
+    totalDurationSeconds: number;
+    totalPenaltySeconds: number;
+    optimizationCost: number;
 
     routeGeometry: RouteGeometry | null;
     routeDurationSeconds: number | null;
     routeDistanceMeters: number | null;
 
     penaltyWeights?: PenaltyWeights;
-    totalPenaltySeconds?: number;
 };
 
 export type StopCluster = {
