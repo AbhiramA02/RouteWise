@@ -1,6 +1,7 @@
 /* This file utilizes the Distance/Durations Matrices to contruct the TSP Route */
 import { type PenaltyWeights, DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types"; // Penalty Settings
 import { type StopCoord, detectionDominantAxis, effectiveLegCost, nextSweepSign, type LegPenaltyContext} from "@/lib/optimization/penalties";
+import { totalMatrixDuration } from "@/lib/optimization/metrics";
 
 export type TspOptions = { // Configures low-level TSP solver
     startIndex?: number;
@@ -32,16 +33,6 @@ export type OpenRouteResult = {
     optimizationCost: number; // Total cost in seconds (minimized by solver)
     startIndex: number;
 };
-
-// Computes real walking time after order is solved (without penalties).
-function sumMatrixDuration(durations: number[][], order: number[]): number {
-    let total = 0;
-    for (let i = 0; i < order.length - 1; i++) {
-        total += durations[order[i]][order[i + 1]];
-    }
-
-    return total;
-}
 
 // Greedy Nearest-Neighbor Open-Path TSP Solver
 export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}, solveContext?: TspSolveContext): TspResult {
@@ -136,7 +127,7 @@ export function solveOpenRoute(durations: number[][], options: OpenRouteOptions 
 
      const { order, totalCost } = solveGreedyOpenTsp(durations, { startIndex }, solveContext);
 
-     const totalDurationSeconds = sumMatrixDuration(durations, order);
+     const totalDurationSeconds = totalMatrixDuration(durations, order);
      const totalPenaltySeconds = totalCost - totalDurationSeconds;
 
      return {

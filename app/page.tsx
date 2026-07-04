@@ -11,15 +11,6 @@ import { fetchOptimize } from "@/lib/optimization/client";
 import type { OptimizeResponse } from "@/lib/optimization/types";
 import { StartDepotPicker } from "@/components/route/StartDepotPicker";
 
-function totalDurationForOrder(durations: number[][], order: number[]): number {
-  let total = 0;
-  for (let i = 0; i < order.length - 1; i++) {
-    total += durations[order[i]][order[i + 1]];
-  }
-
-  return total;
-}
-
 export default function Home() {
   const [text, setText] = useState("");
   const [startIndex, setStartIndex] = useState(0);
@@ -175,13 +166,7 @@ export default function Home() {
               <p>
                 Optimized vs Paste Order: {" "}
                 {Math.round(optimizeResult.totalDurationSeconds / 60)} min vs{" "}
-                {Math.round(
-                  totalDurationForOrder(
-                    optimizeResult.durations,
-                    optimizeResult.stops.map((_, index) => index)
-                  ) / 60
-                )}{" "}
-                min
+                {Math.round(optimizeResult.pasteOrderDurationSeconds / 60)}{" "} min
               </p>
 
               {optimizeResult.routeDurationSeconds != null && (
@@ -207,6 +192,8 @@ export default function Home() {
               <p>
                   Optimization Cost:{" "} {Math.round(optimizeResult.optimizationCost)}s
               </p>
+
+              <p>Backtrack Count: {optimizeResult.backtrackCount}</p>
 
               <ol className = "list-decimal pl-4 space-y-1">
                 {optimizeResult.order.map((stopIndex, visitNumber) => {

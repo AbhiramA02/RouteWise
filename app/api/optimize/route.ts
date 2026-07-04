@@ -9,6 +9,7 @@ import type { OptimizeRequest, OptimizeResponse } from "@/lib/optimization/types
 import { getWalkingDirections } from "@/lib/mapbox/directions";
 import { solveOpenRoute } from "@/lib/optimization/tsp";
 import { DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types";
+import { totalMatrixDuration, countBacktracks } from "@/lib/optimization/metrics";
 
 export async function POST(request: NextRequest) {
     let body: OptimizeRequest;
@@ -74,6 +75,11 @@ export async function POST(request: NextRequest) {
             penaltyWeights,
         });
 
+        const stopCoords = stops.map((s) => ({ lat: s.lat, lng: s.lng }));
+        const pasteOrder = stops.map((_, index) => index);
+        const pasteOrderDurationSeconds = totalMatrixDuration(durations, pasteOrder);
+        const backtrackCount = countBacktracks(order, stopCoords);
+
         const stopsInVisitOrder = order.map((index) => ({
             lng: stops[index].lng, 
             lat: stops[index].lat
@@ -105,7 +111,9 @@ export async function POST(request: NextRequest) {
             routeGeometry,
             routeDurationSeconds,
             routeDistanceMeters,
-            penaltyWeights
+            penaltyWeights,
+            backtrackCount,
+            pasteOrderDurationSeconds,
         };
 
         return NextResponse.json(response);

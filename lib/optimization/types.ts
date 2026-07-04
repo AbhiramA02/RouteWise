@@ -39,6 +39,9 @@ export type OptimizeResponse = {
     routeDistanceMeters: number | null;
 
     penaltyWeights?: PenaltyWeights;
+
+    backtrackCount: number; // # of dominant-axis reversals in visit order
+    pasteOrderDurationSeconds: number; // matrix walk time if visited in paste order 0, 1, 2, ...
 };
 
 export type StopCluster = {
