@@ -45,7 +45,7 @@ export function countBacktracks(order: number[], stops: StopCoord[]): number {
     return backtracks;
 }
 
-export function countSkipNearbyLegs( order: number[], stops: StopCoord[], thresholdMeters: number ): number {
+export function countSkipNearbyLegs( durations: number[][], order: number[], nearbyWalkSeconds: number ): number {
     if (order.length < 2) return 0;
 
     const unvisited = new Set(order);
@@ -58,7 +58,9 @@ export function countSkipNearbyLegs( order: number[], stops: StopCoord[], thresh
 
         for (const k of unvisited) {
             if (k === next) continue;
-            if (haversineMeters(stops[current], stops[k]) < thresholdMeters) {
+
+            const walkSec = durations[current][k];
+            if (Number.isFinite(walkSec) && walkSec <= nearbyWalkSeconds) {
                 count += 1;
                 break;
             }

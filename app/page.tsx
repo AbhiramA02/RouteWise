@@ -185,7 +185,7 @@ export default function Home() {
                 </p>
               )}
 
-              <p>Skip Nearby Legs: {optimizeResult.skipNearbyCount}</p>
+              <p>Skip Nearby Legs (less than 90s walk): {optimizeResult.skipNearbyCount}</p>
 
               <p>
                   Penalty Cost:{" "} {Math.round(optimizeResult.totalPenaltySeconds)}s

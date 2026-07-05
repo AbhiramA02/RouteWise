@@ -1,5 +1,5 @@
 /* This file is used to develop the penalty system/engine */
-import { PenaltyWeights, DEFAULT_PENALTY_WEIGHTS, DEFAULT_SKIP_RADIUS_METERS } from "./types";
+import { PenaltyWeights, DEFAULT_PENALTY_WEIGHTS, DEFAULT_SKIP_RADIUS_METERS, DEFAULT_NEARBY_WALK_SECONDS } from "./types";
 
 export type StopCoord = { lat: number; lng: number };
 export type DominantAxis = "lat" | "lng";
@@ -111,17 +111,19 @@ export function haversineMeters(a: StopCoord, b: StopCoord): number {
     return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-export function skipNearbyPenalty(stops: StopCoord[], unvisited: ReadonlySet<number>, currentIndex: number, nextIndex: number, thresholdMeters: number, wSkipNearby: number): number {
+export function skipNearbyPenalty(durations: number[][], unvisited: ReadonlySet<number>, currentIndex: number, nextIndex: number, nearbyWalkSeconds: number, wSkipNearby: number): number {
     let nearbyLeftBehind = 0;
 
     for (const k of unvisited) {
         if (k === nextIndex) continue;
-        if (haversineMeters(stops[currentIndex], stops[k]) <= thresholdMeters) {
+
+        const walkSec = durations[currentIndex][k];
+        if (Number.isFinite(walkSec) && walkSec <= nearbyWalkSeconds) {
             nearbyLeftBehind += 1;
         }
     }
 
-    const capped = Math.min(nearbyLeftBehind, 3);
+    const capped = Math.min(nearbyLeftBehind, 5);
     return wSkipNearby * capped;
 }
 
@@ -135,7 +137,7 @@ export type BuildLegCostContext = {
     axis: DominantAxis;
     sweepSign: 1 | -1 | null;
     weights: PenaltyWeights;
-    skipNearbyMeters?: number;
+    nearbyWalkSeconds?: number;
 };
 
 // Determines cost from current stop to next stop, including penalties
@@ -156,11 +158,11 @@ export function buildLegCost(durations: number[][], ctx: BuildLegCostContext): n
 
     // Adds penalty for skipping nearby stops to backtrack + u-turn penalties
     penalty += skipNearbyPenalty(
-        ctx.stops,
+        durations,
         ctx.unvisited,
         ctx.currentIndex,
         ctx.nextIndex,
-        ctx.skipNearbyMeters ?? DEFAULT_SKIP_RADIUS_METERS,
+        ctx.nearbyWalkSeconds ?? DEFAULT_NEARBY_WALK_SECONDS,
         ctx.weights.wSkipNearby,
     );
 
@@ -170,12 +172,12 @@ export function buildLegCost(durations: number[][], ctx: BuildLegCostContext): n
 export type ReplayRouteOptions = {
     stops: StopCoord[];
     penaltyWeights: PenaltyWeights;
-    skipNearbyMeters?: number;
+    nearbyWalkSeconds?: number;
 };
 
 // Scores complete route on walk time + penalties
 export function replayRouteCost(durations: number[][], order: number[], options: ReplayRouteOptions): { optimizationCost: number, totalDurationSeconds: number; totalPenaltySeconds: number } {
-    const { stops, penaltyWeights, skipNearbyMeters } = options;
+    const { stops, penaltyWeights, nearbyWalkSeconds } = options;
     const unvisited = new Set(order);
     const axis = detectionDominantAxis(stops, order);
 
@@ -202,7 +204,7 @@ export function replayRouteCost(durations: number[][], order: number[], options:
             axis,
             sweepSign,
             weights: penaltyWeights,
-            skipNearbyMeters,
+            nearbyWalkSeconds,
         });
 
         optimizationCost += legCost;

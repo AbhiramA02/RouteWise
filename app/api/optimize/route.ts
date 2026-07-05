@@ -8,7 +8,7 @@ import { getWalkingDurationMatrix } from "@/lib/mapbox/matrix";
 import type { OptimizeRequest, OptimizeResponse } from "@/lib/optimization/types";
 import { getWalkingDirections } from "@/lib/mapbox/directions";
 import { solveOpenRoute } from "@/lib/optimization/tsp";
-import { DEFAULT_PENALTY_WEIGHTS, DEFAULT_SKIP_RADIUS_METERS } from "@/lib/optimization/types";
+import { DEFAULT_PENALTY_WEIGHTS, DEFAULT_SKIP_RADIUS_METERS, DEFAULT_NEARBY_WALK_SECONDS } from "@/lib/optimization/types";
 import { totalMatrixDuration, countBacktracks, countSkipNearbyLegs } from "@/lib/optimization/metrics";
 
 export async function POST(request: NextRequest) {
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         const pasteOrder = stops.map((_, index) => index);
         const pasteOrderDurationSeconds = totalMatrixDuration(durations, pasteOrder);
         const backtrackCount = countBacktracks(order, stopCoords);
-        const skipNearbyCount = countSkipNearbyLegs(order, stopCoords, DEFAULT_SKIP_RADIUS_METERS);
+        const skipNearbyCount = countSkipNearbyLegs(durations, order, DEFAULT_NEARBY_WALK_SECONDS);
 
         const stopsInVisitOrder = order.map((index) => ({
             lng: stops[index].lng, 
