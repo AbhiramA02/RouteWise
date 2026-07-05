@@ -1,5 +1,5 @@
 /* This file is used to develop/record metrics that will be used to evaluate MVP Route Solver Performance */
-import { detectionDominantAxis, project, type StopCoord } from "@/lib/optimization/penalties";
+import { detectionDominantAxis, haversineMeters, project, type StopCoord } from "@/lib/optimization/penalties";
 
 const AXIS_EPSILON = 1e-7; // Prevents Coordinate Comparison Errors
 
@@ -43,4 +43,27 @@ export function countBacktracks(order: number[], stops: StopCoord[]): number {
     }
 
     return backtracks;
+}
+
+export function countSkipNearbyLegs( order: number[], stops: StopCoord[], thresholdMeters: number ): number {
+    if (order.length < 2) return 0;
+
+    const unvisited = new Set(order);
+    let count = 0;
+
+    for (let i = 0; i < order.length - 1; i++) {
+        const current = order[i];
+        const next = order[i + 1];
+        unvisited.delete(current);
+
+        for (const k of unvisited) {
+            if (k === next) continue;
+            if (haversineMeters(stops[current], stops[k]) < thresholdMeters) {
+                count += 1;
+                break;
+            }
+        }
+    }
+
+    return count;
 }

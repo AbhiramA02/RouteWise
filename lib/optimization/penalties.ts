@@ -1,5 +1,5 @@
 /* This file is used to develop the penalty system/engine */
-import { PenaltyWeights, DEFAULT_PENALTY_WEIGHTS } from "./types";
+import { PenaltyWeights, DEFAULT_PENALTY_WEIGHTS, DEFAULT_SKIP_RADIUS_METERS } from "./types";
 
 export type StopCoord = { lat: number; lng: number };
 export type DominantAxis = "lat" | "lng";
@@ -97,4 +97,125 @@ export function effectiveLegCost(durations: number[][], ctx: LegPenaltyContext, 
     const base = durations[ctx.currentIndex][nextIndex];
     if (!Number.isFinite(base)) return Number.POSITIVE_INFINITY;
     return base + computeLegPenalty(ctx, nextIndex);
+}
+
+// Gets Distance in Meters for 2 points on Earth's Surface
+export function haversineMeters(a: StopCoord, b: StopCoord): number {
+    const R = 6371000;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+export function skipNearbyPenalty(stops: StopCoord[], unvisited: ReadonlySet<number>, currentIndex: number, nextIndex: number, thresholdMeters: number, wSkipNearby: number): number {
+    let nearbyLeftBehind = 0;
+
+    for (const k of unvisited) {
+        if (k === nextIndex) continue;
+        if (haversineMeters(stops[currentIndex], stops[k]) <= thresholdMeters) {
+            nearbyLeftBehind += 1;
+        }
+    }
+
+    const capped = Math.min(nearbyLeftBehind, 3);
+    return wSkipNearby * capped;
+}
+
+// Requisite context for determining leg cost
+export type BuildLegCostContext = {
+    stops: StopCoord[];
+    unvisited: ReadonlySet<number>;
+    prevIndex: number | null;
+    currentIndex: number;
+    nextIndex: number;
+    axis: DominantAxis;
+    sweepSign: 1 | -1 | null;
+    weights: PenaltyWeights;
+    skipNearbyMeters?: number;
+};
+
+// Determines cost from current stop to next stop, including penalties
+export function buildLegCost(durations: number[][], ctx: BuildLegCostContext): number {
+    const base = durations[ctx.currentIndex][ctx.nextIndex];
+    if (!Number.isFinite(base)) return Number.POSITIVE_INFINITY;
+
+    const legCtx: LegPenaltyContext = {
+        stops: ctx.stops,
+        axis: ctx.axis,
+        sweepSign: ctx.sweepSign,
+        prevIndex: ctx.prevIndex,
+        currentIndex: ctx.currentIndex,
+        weights: ctx.weights,
+    };
+
+    let penalty = computeLegPenalty(legCtx, ctx.nextIndex);
+
+    // Adds penalty for skipping nearby stops to backtrack + u-turn penalties
+    penalty += skipNearbyPenalty(
+        ctx.stops,
+        ctx.unvisited,
+        ctx.currentIndex,
+        ctx.nextIndex,
+        ctx.skipNearbyMeters ?? DEFAULT_SKIP_RADIUS_METERS,
+        ctx.weights.wSkipNearby,
+    );
+
+    return base + penalty;
+}
+
+export type ReplayRouteOptions = {
+    stops: StopCoord[];
+    penaltyWeights: PenaltyWeights;
+    skipNearbyMeters?: number;
+};
+
+// Scores complete route on walk time + penalties
+export function replayRouteCost(durations: number[][], order: number[], options: ReplayRouteOptions): { optimizationCost: number, totalDurationSeconds: number; totalPenaltySeconds: number } {
+    const { stops, penaltyWeights, skipNearbyMeters } = options;
+    const unvisited = new Set(order);
+    const axis = detectionDominantAxis(stops, order);
+
+    let optimizationCost = 0;
+    let totalDurationSeconds = 0;
+    let prev: number | null = null;
+    let sweepSign: 1 | -1 | null = null;
+
+    for (let i = 0; i < order.length - 1; i++) {
+        const current = order[i];
+        const next = order[i + 1];
+
+        const legDuration = durations[current][next];
+        if (!Number.isFinite(legDuration)) {
+            return { optimizationCost: Infinity, totalDurationSeconds: Infinity, totalPenaltySeconds: Infinity };
+        }
+
+        const legCost = buildLegCost(durations, {
+            stops,
+            unvisited,
+            prevIndex: prev,
+            currentIndex: current,
+            nextIndex: next,
+            axis,
+            sweepSign,
+            weights: penaltyWeights,
+            skipNearbyMeters,
+        });
+
+        optimizationCost += legCost;
+        totalDurationSeconds += legDuration;
+        unvisited.delete(current);
+
+        sweepSign = nextSweepSign(
+            {stops, axis, sweepSign, prevIndex: prev, currentIndex: current,  weights: penaltyWeights },
+            next,
+        );
+        prev = current;
+    }
+
+    const totalPenaltySeconds = optimizationCost - totalDurationSeconds;
+    return { optimizationCost,  totalDurationSeconds, totalPenaltySeconds };
 }

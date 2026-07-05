@@ -1,13 +1,19 @@
 /* This file implements 2-Opt Algorithm on existing TSP Solution */
-import { totalMatrixDuration } from "@/lib/optimization/metrics";
+import { type StopCoord, replayRouteCost } from "@/lib/optimization/penalties";
+import { type PenaltyWeights } from "@/lib/optimization/types";
 
 export type TwoOptOptions = {
     startIndex: number;
+    stops: StopCoord[];
+    penaltyWeights: PenaltyWeights;
+    skipNearbyMeters?: number;
 };
 
 export type TwoOptResult = {
     order: number[];
+    optimizationCost: number;
     totalDurationSeconds: number;
+    totalPenaltySeconds: number;
 };
 
 // Reverses segment of order between indices i and j (inclusive)
@@ -25,10 +31,8 @@ function reverseSegment(order: number[], i: number, j: number): number[] {
 
 export function improveOpenRoute2Opt(durations: number[][], order: number[], options: TwoOptOptions): TwoOptResult {
     if (order. length <= 3) {
-        return {
-            order: [...order],
-            totalDurationSeconds: totalMatrixDuration(durations, order),
-        };
+        const finalCost = replayRouteCost(durations, order, { stops: options.stops, penaltyWeights: options.penaltyWeights, skipNearbyMeters: options.skipNearbyMeters });
+        return { order: [...order], optimizationCost: finalCost.optimizationCost,  totalDurationSeconds: finalCost.totalDurationSeconds, totalPenaltySeconds: finalCost.totalPenaltySeconds };
     }
 
     // Safety: start must be first stop
@@ -37,7 +41,11 @@ export function improveOpenRoute2Opt(durations: number[][], order: number[], opt
     }
 
     let best = [...order];
-    let bestCost = totalMatrixDuration(durations, best);
+    let bestCost = replayRouteCost(durations, best, {
+        stops: options.stops,
+        penaltyWeights: options.penaltyWeights,
+        skipNearbyMeters: options.skipNearbyMeters,
+    }).optimizationCost;
     let improved = true;
 
     while (improved) {
@@ -46,16 +54,21 @@ export function improveOpenRoute2Opt(durations: number[][], order: number[], opt
         for (let i = 1; i < best.length - 1; i++) {
             for (let j = i + 1; j < best.length; j++) {
                 const candidate = reverseSegment(best, i, j);
-                const cost = totalMatrixDuration(durations, candidate);
+                const { optimizationCost } = replayRouteCost(durations, candidate, {
+                    stops: options.stops,
+                    penaltyWeights: options.penaltyWeights,
+                    skipNearbyMeters: options.skipNearbyMeters,
+                });
 
-                if (cost < bestCost) {
+                if (optimizationCost < bestCost) {
                     best = candidate;
-                    bestCost = cost;
+                    bestCost = optimizationCost;
                     improved = true;
                 }
             }
         }
     }
 
-    return { order: best, totalDurationSeconds: bestCost };
+    const finalCost = replayRouteCost(durations, best, { stops: options.stops, penaltyWeights: options.penaltyWeights, skipNearbyMeters: options.skipNearbyMeters });
+    return { order: best, optimizationCost: finalCost.optimizationCost,  totalDurationSeconds: finalCost.totalDurationSeconds, totalPenaltySeconds: finalCost.totalPenaltySeconds };
 }

@@ -1,6 +1,6 @@
 /* This file utilizes the Distance/Durations Matrices to contruct the TSP Route */
 import { type PenaltyWeights, DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types"; // Penalty Settings
-import { type StopCoord, detectionDominantAxis, effectiveLegCost, nextSweepSign, type LegPenaltyContext} from "@/lib/optimization/penalties";
+import { type StopCoord, detectionDominantAxis, buildLegCost, nextSweepSign, type LegPenaltyContext} from "@/lib/optimization/penalties";
 import { totalMatrixDuration } from "@/lib/optimization/metrics";
 import { improveOpenRoute2Opt } from "@/lib/optimization/two-opt";
 
@@ -87,8 +87,23 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}, s
             // Takes into account penalties if enabled
             let legCost: number;
             if (usePenalties) {
-                const ctx: LegPenaltyContext = { stops: solveContext!.stops, axis, sweepSign, prevIndex: prev, currentIndex: current, weights: weights! };
-                legCost = effectiveLegCost(cost, ctx, candidate);
+                const unvisited = new Set<number>();
+                for (let i = 0; i < n; i++) {
+                    if (!visited.has(i)) {
+                        unvisited.add(i);
+                    }
+                }
+
+                legCost = buildLegCost(cost, {
+                    stops: solveContext!.stops,
+                    unvisited,
+                    prevIndex: prev,
+                    currentIndex: current,
+                    nextIndex: candidate,
+                    axis,
+                    sweepSign,
+                    weights: weights!,
+                });
             } else {
                 legCost = cost[current][candidate];
             }
@@ -121,26 +136,27 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}, s
 
 export function solveOpenRoute(durations: number[][], options: OpenRouteOptions = {}): OpenRouteResult {
     const startIndex = options.startIndex ?? 0;
+    
+    const stops = options.stops!;
+    const penaltyWeights = options.penaltyWeights ?? DEFAULT_PENALTY_WEIGHTS;
+
     const solveContext = options.stops != null ? { 
-        stops: options.stops,
-        penaltyWeights: options.penaltyWeights ?? DEFAULT_PENALTY_WEIGHTS,
-     } : undefined;
+        stops,
+        penaltyWeights,
+    } : undefined;
 
-     // Seed order (still may use penalties)
-     const { order: greedyOrder } = solveGreedyOpenTsp(durations, { startIndex }, solveContext);
+    const { order: greedyOrder } = solveGreedyOpenTsp(
+        durations, 
+        { startIndex }, 
+        solveContext
+    );
 
-     // Improve walk-time with 2-Opt (matrix only)
-     const { order, totalDurationSeconds } = improveOpenRoute2Opt(durations, greedyOrder, { startIndex });
+    const { 
+        order, 
+        optimizationCost, 
+        totalDurationSeconds, 
+        totalPenaltySeconds 
+    } = improveOpenRoute2Opt(durations, greedyOrder, { startIndex, stops, penaltyWeights });
 
-     // Report walk time from improved order
-     const totalPenaltySeconds = 0;
-     const optimizationCost = totalDurationSeconds;
-
-     return {
-        order,
-        totalDurationSeconds,
-        totalPenaltySeconds,
-        optimizationCost,
-        startIndex,
-     };
+    return { order, optimizationCost, totalDurationSeconds, totalPenaltySeconds, startIndex };
 }
