@@ -113,18 +113,19 @@ export function haversineMeters(a: StopCoord, b: StopCoord): number {
 
 export function skipNearbyPenalty(durations: number[][], unvisited: ReadonlySet<number>, currentIndex: number, nextIndex: number, nearbyWalkSeconds: number, wSkipNearby: number): number {
     let nearbyLeftBehind = 0;
+    const toNext = durations[currentIndex][nextIndex];
 
     for (const k of unvisited) {
         if (k === nextIndex) continue;
 
-        const walkSec = durations[currentIndex][k];
-        if (Number.isFinite(walkSec) && walkSec <= nearbyWalkSeconds) {
+        const toK = durations[currentIndex][k];
+        if (Number.isFinite(toK) && toK <= nearbyWalkSeconds && toK < toNext) {
             nearbyLeftBehind += 1;
         }
     }
 
-    const capped = Math.min(nearbyLeftBehind, 5);
-    return wSkipNearby * capped;
+    //const capped = Math.min(nearbyLeftBehind, 5);
+    return wSkipNearby * nearbyLeftBehind;
 }
 
 // Requisite context for determining leg cost

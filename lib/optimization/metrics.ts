@@ -56,11 +56,14 @@ export function countSkipNearbyLegs( durations: number[][], order: number[], nea
         const next = order[i + 1];
         unvisited.delete(current);
 
+        const toNext = durations[current][next];
+        if (!Number.isFinite(toNext)) continue;
+
         for (const k of unvisited) {
             if (k === next) continue;
 
-            const walkSec = durations[current][k];
-            if (Number.isFinite(walkSec) && walkSec <= nearbyWalkSeconds) {
+            const toK = durations[current][k];
+            if (Number.isFinite(toK) && toK <= nearbyWalkSeconds && toK < toNext) {
                 count += 1;
                 break;
             }
