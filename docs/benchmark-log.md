@@ -1,6 +1,6 @@
 # Benchmark Log
 
-## sample-stops.ts — Jul 9 baseline (Start: Stop 1)
+### Jul 9 Baseline (Start: Stop 1) - Sample-Stops.ts
 
 | Metric | Value |
 |--------|-------|
@@ -13,5 +13,17 @@
 | Optimization cost (s) | 4449s |
 | Route distance (m) | 1.35 mi (2067 m) |
 
-## Human Ideal Order (Jul 9)
-1 -> 9 -> 14
+### Human Ideal Order (Jul 9)
+1 -> 5 -> 6 -> 18 -> 19 -> 7 -> 20 -> 23 -> 24 -> 14 -> 25 -> 15 -> 13 -> 22 -> 12 -> 11 -> 10 -> 21 -> 9 -> 8 -> 17 -> 4 -> 2 -> 16 -> 3
+
+### Observations - Algorithm vs. Human
+**Where the Algorithm Fails**
+- First 8 Stops: Algorithm Scatters (1->19->7->3...), human sweeps north (1->5->6->18)
+- Algorithm ends at stop 14 (368m from start); human ends at stop 3 (55m from start)
+- Algorithm has visible knot/zigzag mid route
+
+**What the Human Order Optimizes For**
+1. Corridor Sweeps - Walk one direction along a street before turning
+2. Pocket-First - Finish an area before crossing to next
+3. Soft Loop - End near start (stop 3) without forcing round-trip TSP
+4. Anti-ZigZag - Fewer sharp turns, not necessarily fewer total backtracks
