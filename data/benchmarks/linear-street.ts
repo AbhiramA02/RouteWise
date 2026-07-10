@@ -5,12 +5,11 @@ export const LINEAR_STREET_STOPS_TEXT = `34.252399260785005, -118.75202180469213
 34.25217004560413, -118.7529680749601
 34.252124631371586, -118.75321359123637
 34.25207292094633, -118.75340717408979
-34.251986211014305, -118.75365216747021
-`;
+34.251986211014305, -118.75365216747021`;
 
 export const LINEAR_STREET_META = {
     id: "linear-street",
-    name: "Linear Street (8 Stops)",
+    name: "Linear Street",
     description: "One row - solver should sweep with <= 1 U-turn",
     startIndex: 0,
 }
