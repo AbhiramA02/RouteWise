@@ -44,6 +44,8 @@ export type OptimizeResponse = {
     pasteOrderDurationSeconds: number; // matrix walk time if visited in paste order 0, 1, 2, ...
 
     skipNearbyCount: number; // legs that left an unvisited stop within DEFAULT_NEARBY_WALK_SECONDS
+
+    clusterExitCount: number;
 };
 
 export type StopCluster = {
@@ -60,13 +62,16 @@ export type PenaltyWeights = {
     wBacktrack: number; // extra seconds for re-visiting stops
     wUturn: number; // extra seconds for making a u-turn
     wSkipNearby: number; // extra seconds for skipping nearby stops
+    wClusterExit: number; // extra seconds for exiting a cluster
 };
 
 export const DEFAULT_PENALTY_WEIGHTS: PenaltyWeights = { // Default Configuration
     wBacktrack: 90,
     wUturn: 120,
     wSkipNearby: 70,
+    wClusterExit: 80,
 };
 
 export const DEFAULT_SKIP_RADIUS_METERS = 50;
 export const DEFAULT_NEARBY_WALK_SECONDS = 90;
+export const DEFAULT_CLUSTER_THRESHOLD_METERS = 120;

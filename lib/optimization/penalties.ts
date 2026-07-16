@@ -83,6 +83,28 @@ export function computeLegPenalty(ctx: LegPenaltyContext, nextIndex: number): nu
     return penalty;
 }
 
+/* Computes penalty for exiting a cluster */
+export function clusterExitPenalty(
+    clusterOf: ReadonlyMap<number, number>,
+    unvisited: ReadonlySet<number>,
+    currentIndex: number,
+    nextIndex: number,
+    wClusterExit: number,
+): number {
+    const fromC = clusterOf.get(currentIndex);
+    const toC = clusterOf.get(nextIndex);
+
+    if (fromC == null || toC == null || fromC === toC) return 0;
+
+    let leftBehind = 0;
+    for (const k of unvisited) {
+        if (k === nextIndex) continue;
+        if (clusterOf.get(k) === fromC) leftBehind += 1;
+    }
+
+    return wClusterExit * leftBehind;
+}
+
 /* Updates route's current direction of travel */
 export function nextSweepSign(ctx: LegPenaltyContext, nextIndex: number): 1 | -1 | null {
     const delta = project(ctx.stops[nextIndex], ctx.axis) - project(ctx.stops[ctx.currentIndex], ctx.axis);
@@ -139,6 +161,7 @@ export type BuildLegCostContext = {
     sweepSign: 1 | -1 | null;
     weights: PenaltyWeights;
     nearbyWalkSeconds?: number;
+    clusterOf?: ReadonlyMap<number, number>;
 };
 
 // Determines cost from current stop to next stop, including penalties
@@ -167,6 +190,16 @@ export function buildLegCost(durations: number[][], ctx: BuildLegCostContext): n
         ctx.weights.wSkipNearby,
     );
 
+    if (ctx.clusterOf != null) {
+        penalty += clusterExitPenalty(
+            ctx.clusterOf,
+            ctx.unvisited,
+            ctx.currentIndex,
+            ctx.nextIndex,
+            ctx.weights.wClusterExit,
+        );
+    }
+
     return base + penalty;
 }
 
@@ -174,11 +207,12 @@ export type ReplayRouteOptions = {
     stops: StopCoord[];
     penaltyWeights: PenaltyWeights;
     nearbyWalkSeconds?: number;
+    clusterOf?: ReadonlyMap<number, number>;
 };
 
 // Scores complete route on walk time + penalties
 export function replayRouteCost(durations: number[][], order: number[], options: ReplayRouteOptions): { optimizationCost: number, totalDurationSeconds: number; totalPenaltySeconds: number } {
-    const { stops, penaltyWeights, nearbyWalkSeconds } = options;
+    const { stops, penaltyWeights, nearbyWalkSeconds, clusterOf } = options;
     const unvisited = new Set(order);
     const axis = detectionDominantAxis(stops, order);
 
@@ -196,6 +230,8 @@ export function replayRouteCost(durations: number[][], order: number[], options:
             return { optimizationCost: Infinity, totalDurationSeconds: Infinity, totalPenaltySeconds: Infinity };
         }
 
+        unvisited.delete(current);
+
         const legCost = buildLegCost(durations, {
             stops,
             unvisited,
@@ -206,6 +242,7 @@ export function replayRouteCost(durations: number[][], order: number[], options:
             sweepSign,
             weights: penaltyWeights,
             nearbyWalkSeconds,
+            clusterOf,
         });
 
         optimizationCost += legCost;
