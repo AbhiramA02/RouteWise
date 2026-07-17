@@ -72,3 +72,30 @@ export function countSkipNearbyLegs( durations: number[][], order: number[], nea
 
     return count;
 }
+
+export function countClusterExits(order: number[], clusterOf: ReadonlyMap<number, number>): number {
+    if (order.length < 2) return 0;
+
+    const unvisited = new Set(order);
+    let count = 0;
+
+    for (let i = 0; i < order.length - 1; i++) {
+        const current = order[i];
+        const next = order[i + 1];
+        unvisited.delete(current);
+
+        const fromCluster = clusterOf.get(current);
+        const toCluster = clusterOf.get(next);
+        if (fromCluster == null || toCluster == null || fromCluster === toCluster) continue;
+
+        for (const k of unvisited) {
+            if (k === next) continue;
+            if (clusterOf.get(k) === fromCluster) {
+                count++;
+                break;
+            }
+        }
+    }
+
+    return count;
+}

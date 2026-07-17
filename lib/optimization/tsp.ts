@@ -1,8 +1,9 @@
 /* This file utilizes the Distance/Durations Matrices to contruct the TSP Route */
 import { type PenaltyWeights, DEFAULT_PENALTY_WEIGHTS } from "@/lib/optimization/types"; // Penalty Settings
 import { type StopCoord, detectionDominantAxis, buildLegCost, nextSweepSign, type LegPenaltyContext} from "@/lib/optimization/penalties";
-import { totalMatrixDuration } from "@/lib/optimization/metrics";
+import { totalMatrixDuration, countClusterExits } from "@/lib/optimization/metrics";
 import { improveOpenRoute2Opt } from "@/lib/optimization/two-opt";
+import { buildClusterLookup, clusterByWalkingDistanceDiameter } from "./cluster";
 
 export type TspOptions = { // Configures low-level TSP solver
     startIndex?: number;
@@ -19,12 +20,15 @@ export type TspSolveContext = {
     penaltyWeights?: PenaltyWeights;
     /* Indices to use for dominant-axis detection (cluster stops or all). */
     axisIndices?: number[];
+    clusterOf?: ReadonlyMap<number, number>
 }
 
 export type OpenRouteOptions = { // Inputs for MVP Route Solver
     startIndex?: number;
     penaltyWeights?: PenaltyWeights;
     stops?: StopCoord[];
+    distances?: number[][];
+    clusterThresholdMeters?: number;
 };
 
 export type OpenRouteResult = {
@@ -33,6 +37,7 @@ export type OpenRouteResult = {
     totalPenaltySeconds: number; // Penalty cost in seconds
     optimizationCost: number; // Total cost in seconds (minimized by solver)
     startIndex: number;
+    clusterExitCount: number;
 };
 
 // Greedy Nearest-Neighbor Open-Path TSP Solver
@@ -103,6 +108,7 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}, s
                     axis,
                     sweepSign,
                     weights: weights!,
+                    clusterOf: solveContext!.clusterOf, // applies cluster exit penalty in greedy search
                 });
             } else {
                 legCost = cost[current][candidate];
@@ -136,13 +142,23 @@ export function solveGreedyOpenTsp(cost: number[][], options: TspOptions = {}, s
 
 export function solveOpenRoute(durations: number[][], options: OpenRouteOptions = {}): OpenRouteResult {
     const startIndex = options.startIndex ?? 0;
-    
     const stops = options.stops!;
     const penaltyWeights = options.penaltyWeights ?? DEFAULT_PENALTY_WEIGHTS;
+
+    //Build soft pocket grouping from walking-distance matrix
+    let clusterOf: Map<number, number> | undefined;
+    if (options.distances != null) {
+        const clusters = clusterByWalkingDistanceDiameter(options.distances, {
+            thresholdMeters: options.clusterThresholdMeters ?? 120,
+        });
+        console.log("clusters:", clusters.length, clusters.map(c => c.length));
+        clusterOf = buildClusterLookup(clusters);
+    }
 
     const solveContext = options.stops != null ? { 
         stops,
         penaltyWeights,
+        clusterOf,
     } : undefined;
 
     const { order: greedyOrder } = solveGreedyOpenTsp(
@@ -156,7 +172,9 @@ export function solveOpenRoute(durations: number[][], options: OpenRouteOptions 
         optimizationCost, 
         totalDurationSeconds, 
         totalPenaltySeconds 
-    } = improveOpenRoute2Opt(durations, greedyOrder, { startIndex, stops, penaltyWeights });
+    } = improveOpenRoute2Opt(durations, greedyOrder, { startIndex, stops, penaltyWeights, clusterOf });
 
-    return { order, optimizationCost, totalDurationSeconds, totalPenaltySeconds, startIndex };
+    const clusterExitCount = clusterOf != null ? countClusterExits(order, clusterOf) : 0;
+
+    return { order, optimizationCost, totalDurationSeconds, totalPenaltySeconds, startIndex, clusterExitCount };
 }

@@ -7,6 +7,7 @@ export type TwoOptOptions = {
     stops: StopCoord[];
     penaltyWeights: PenaltyWeights;
     nearbyWalkSeconds?: number;
+    clusterOf?: Map<number, number>;
 };
 
 export type TwoOptResult = {
@@ -31,7 +32,7 @@ function reverseSegment(order: number[], i: number, j: number): number[] {
 
 export function improveOpenRoute2Opt(durations: number[][], order: number[], options: TwoOptOptions): TwoOptResult {
     if (order. length <= 3) {
-        const finalCost = replayRouteCost(durations, order, { stops: options.stops, penaltyWeights: options.penaltyWeights, nearbyWalkSeconds: options.nearbyWalkSeconds });
+        const finalCost = replayRouteCost(durations, order, { stops: options.stops, penaltyWeights: options.penaltyWeights, nearbyWalkSeconds: options.nearbyWalkSeconds, clusterOf: options.clusterOf });
         return { order: [...order], optimizationCost: finalCost.optimizationCost,  totalDurationSeconds: finalCost.totalDurationSeconds, totalPenaltySeconds: finalCost.totalPenaltySeconds };
     }
 
@@ -45,6 +46,7 @@ export function improveOpenRoute2Opt(durations: number[][], order: number[], opt
         stops: options.stops,
         penaltyWeights: options.penaltyWeights,
         nearbyWalkSeconds: options.nearbyWalkSeconds,
+        clusterOf: options.clusterOf,
     }).optimizationCost;
     let improved = true;
 
@@ -58,6 +60,7 @@ export function improveOpenRoute2Opt(durations: number[][], order: number[], opt
                     stops: options.stops,
                     penaltyWeights: options.penaltyWeights,
                     nearbyWalkSeconds: options.nearbyWalkSeconds,
+                    clusterOf: options.clusterOf,
                 });
 
                 if (optimizationCost < bestCost) {
@@ -69,6 +72,6 @@ export function improveOpenRoute2Opt(durations: number[][], order: number[], opt
         }
     }
 
-    const finalCost = replayRouteCost(durations, best, { stops: options.stops, penaltyWeights: options.penaltyWeights, nearbyWalkSeconds: options.nearbyWalkSeconds });
+    const finalCost = replayRouteCost(durations, best, { stops: options.stops, penaltyWeights: options.penaltyWeights, nearbyWalkSeconds: options.nearbyWalkSeconds, clusterOf: options.clusterOf });
     return { order: best, optimizationCost: finalCost.optimizationCost,  totalDurationSeconds: finalCost.totalDurationSeconds, totalPenaltySeconds: finalCost.totalPenaltySeconds };
 }

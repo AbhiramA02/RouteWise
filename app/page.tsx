@@ -204,6 +204,8 @@ export default function Home() {
 
               <p>Backtrack Count: {optimizeResult.backtrackCount}</p>
 
+              <p>Cluster Exits: {optimizeResult.clusterExitCount}</p>
+
               <ol className = "list-decimal pl-4 space-y-1">
                 {optimizeResult.order.map((stopIndex, visitNumber) => {
                   const stop = optimizeResult.stops[stopIndex];

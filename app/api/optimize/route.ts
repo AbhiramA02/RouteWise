@@ -69,10 +69,11 @@ export async function POST(request: NextRequest) {
 
         const startIndex = body.startIndex ?? 0;
 
-        const { order, totalDurationSeconds, totalPenaltySeconds, optimizationCost, } = solveOpenRoute(durations, {
+        const { order, totalDurationSeconds, totalPenaltySeconds, optimizationCost, clusterExitCount } = solveOpenRoute(durations, {
             startIndex,
             stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })),
             penaltyWeights,
+            distances,
         });
 
         const stopCoords = stops.map((s) => ({ lat: s.lat, lng: s.lng }));
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
             backtrackCount,
             pasteOrderDurationSeconds,
             skipNearbyCount,
+            clusterExitCount,
         };
 
         return NextResponse.json(response);
