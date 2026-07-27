@@ -1,3 +1,4 @@
+/* This files finds the nearest point on a street segment and returns the snapped result, along distance, and other useful information */
 import nearestPointOnLine from "@turf/nearest-point-on-line";
 import { lineString, point } from "@turf/helpers";
 import type { StreetSegment } from "./types";
