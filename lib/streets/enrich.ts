@@ -24,13 +24,13 @@ export async function enrichStops(
     stops: StreetStopInput[],
     options?: { paddingMeters?: number },
 ): Promise<EnrichResult> {
-    const bbox = computePaddedBoundingBox(stops, options?.paddingMeters ?? 90);
-    const ways = await fetchWaysForBbox(bbox);
-    const segments = waysToSegments(ways);
+    const bbox = computePaddedBoundingBox(stops, options?.paddingMeters ?? 90); // Calculate geographic area surrounding all stops
+    const ways = await fetchWaysForBbox(bbox); // Get OSM Paths through Overpass API
+    const segments = waysToSegments(ways); // Convert OSM Paths to StreetSegments
 
-    const enriched: EnrichedStop[] = stops.map((stop) => {
-        const snap = snapDoorToSegment(stop, segments);
-        if (!snap.segment || snap.snapLng == null || snap.snapLat == null) {
+    const enriched: EnrichedStop[] = stops.map((stop) => { // Process Every Stop to get Enriched Output
+        const snap = snapDoorToSegment(stop, segments); // Find Closest Segment to Door Location (Snapping)
+        if (!snap.segment || snap.snapLng == null || snap.snapLat == null) { // Error Handling for Failed Snap
             return {
                 ...stop,
                 osmWayId: null,
@@ -46,7 +46,7 @@ export async function enrichStops(
             };
         }
 
-        const side = sideOfStreet({
+        const side = sideOfStreet({ // Determine Side of Street for Indvidual Stop
             doorLng: stop.lng,
             doorLat: stop.lat,
             snapLng: snap.snapLng,
@@ -55,10 +55,10 @@ export async function enrichStops(
             segEnd: snap.segment.end,
         });
 
-        const reasons: string[] = [...snap.lowConfidenceReasons];
+        const reasons: string[] = [...snap.lowConfidenceReasons]; // Copy Low Confidence Reasons from Snap
         if (side.side === "on_line") reasons.push("on_centerline");
 
-        return {
+        return { // Return Enriched Stop with Additional Information
             ...stop,
             osmWayId: snap.segment.osmWayId,
             segmentId: snap.segment.id,
@@ -73,9 +73,9 @@ export async function enrichStops(
         };
     });
 
-    const offsets = enriched.map((s) => s.offsetM).filter((n): n is number => n != null);
+    const offsets = enriched.map((s) => s.offsetM).filter((n): n is number => n != null); // Calculate Offset for All Snapped Stops (Mean Offset)
 
-    const summary = {
+    const summary = { // Calculate Summary Statistics for Enriched Stops
         stopCount: enriched.length,
         wayCount: ways.length,
         segmentCount: segments.length,
