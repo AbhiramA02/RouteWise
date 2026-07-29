@@ -10,7 +10,8 @@
     "phase0:fetch-streets": "tsx scripts/phase0/fetch-streets.ts",
     "phase0:snap": "tsx scripts/phase0/snap-and-side.ts",
     "phase0:verify": "tsx scripts/phase0/verify.ts",
-    "test:streets": "tsx --test lib/streets/*.test.ts"
+    "test:streets": "tsx --test lib/streets/*.test.ts",
+    "phase1:enrich": "tsx scripts/phase1/enrich-sample.ts"
   },
   "dependencies": {
     "@turf/bearing": "^7.3.5",
