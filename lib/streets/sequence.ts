@@ -84,7 +84,7 @@ export type SequenceResult = {
     orderedSegments: StreetSegment[];
 };
 
-/* Production Sequencer: Joint Next-Segment + Orientation from Current Exit */
+/* Production Sequencer: Joint Next-Segment + Orientation from Current Exit (INCOMPLETE) */
 export function sequenceActiveSegments(
     segments: StreetSegment[],
     stops: EnrichedStop[],
