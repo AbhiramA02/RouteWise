@@ -1,7 +1,7 @@
 /* This file uses the nearest midpoint strategy in order to return segment order. */
 import distance from "@turf/distance";
 import type { EnrichedStop, StreetSegment } from "./types";
-import { activeSegments, groupStopsBySegment, segmentMidpoint, type SegmentAdjacency } from "./graph";
+import { activeSegments, groupStopsBySegment, segmentMidpoint, buildSegmentAdjacency, type SegmentAdjacency } from "./graph";
 
 // Order segments by selected the segment with the nearest midpoint to it (BACKUP METHOD - FALLBACK)
 export function orderSegmentsNearestMidpoint(
@@ -84,7 +84,7 @@ export type SequenceResult = {
     orderedSegments: StreetSegment[];
 };
 
-/* Production Sequencer: Joint Next-Segment + Orientation from Current Exit (INCOMPLETE) */
+/* Production Sequencer: Joint Next-Segment + Orientation from Current Exit */
 export function sequenceActiveSegments(
     segments: StreetSegment[],
     stops: EnrichedStop[],
@@ -109,4 +109,64 @@ export function sequenceActiveSegments(
     const byId = new Map(active.map((s) => [s.id, s]));
     const out: EnrichedStop[] = [];
     const orderedSegments: StreetSegment[] = [];
+
+    // --- Force start at startStopId's segment, orientation so startStop is first ---
+    let currentId: string | null = startStop?.segmentId ?? null;
+    if (currentId == null || !remaining.has(currentId)) {
+        currentId = active[0].id;
+    }
+
+    {
+        const seg = byId.get(currentId)!;
+        let local = orderStopsOnSegment(bySegment.get(currentId) ?? []);
+        if (startStop && startStop.segmentId === currentId) {
+            const fwd = local;
+            const bak = [...local].reverse();
+
+            if (bak[0]?.id === startStop.id) local = bak;
+            else if (fwd[0]?.id === startStop.id) local = fwd;
+            else {
+                const i = local.findIndex((s) => s.id === startStop.id);
+                if (i >= 0) {
+                    local = [...local.slice(i), ...local.slice(0, i).reverse()];
+                }
+            }
+        }
+
+        out.push(...local);
+        orderedSegments.push(seg);
+        remaining.delete(currentId);
+    }
+
+    let exit = stopPoint(out[out.length - 1]);
+    let prevId = currentId;
+
+    while (remaining.size > 0) {
+        let bestId: string | null = null;
+        let bestChosen: EnrichedStop[] = [];
+        let bestScore = Infinity;
+
+        for (const id of remaining) {
+            const base = orderStopsOnSegment(bySegment.get(id) ?? []);
+            if (base.length === 0) continue;
+            const { cost, chosen } = entryCost(exit, base);
+            const connected = adj.get(prevId)?.has(id) ?? false;
+            const sameWay = byId.get(prevId)!.osmWayId === byId.get(id)!.osmWayId;
+            const score = cost - (connected ? adjBonus : 0) - (sameWay ? wayBonus : 0);
+            if (score < bestScore || (score === bestScore && id < (bestId ?? ""))) {
+                bestScore = score;
+                bestId = id;
+                bestChosen = chosen;
+            }
+        }
+
+        if (bestId == null) break;
+        out.push(...bestChosen);
+        orderedSegments.push(byId.get(bestId)!);
+        remaining.delete(bestId);
+        exit = stopPoint(bestChosen[bestChosen.length - 1]);
+        prevId = bestId;
+    }
+
+    return { stops: out, orderedSegments };
 }
